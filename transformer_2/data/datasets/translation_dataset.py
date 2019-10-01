@@ -323,10 +323,10 @@ class TranslationDataset(object):
 
     def make_batch_generator(
         self,
-        max_batch_tokens=1000,
-        max_batch_sentences=100,
+        max_batch_tokens=1024,
+        max_batch_sentences=1024,
         shuffle=False,
-        buffer_size=100000,
+        buffer_size=10000,
         do_optimal_batching=False,
         generate_infinitely=False,
         warn_on_skip=True
@@ -421,10 +421,10 @@ class TranslationDataset(object):
 
     def make_tf_dataset(
         self,
-        max_batch_tokens=1000,
-        max_batch_sentences=100,
+        max_batch_tokens=1024,
+        max_batch_sentences=1024,
         shuffle=False,
-        buffer_size=100000,
+        buffer_size=10000,
         do_optimal_batching=False,
         generate_infinitely=False,
         warn_on_skip=True
