@@ -175,15 +175,15 @@ _C.train_configs.fp16 = False
 
 # `dropout` (type: float) (default: 0.0)
 # Dropout probability
-_C.train_configs.dropout = 0.0
+_C.train_configs.dropout = None
 
 # `dropout` (type: float) (default: 0.0)
 # Dropout probability for attention weights
-_C.train_configs.attn_dropout = 0.0
+_C.train_configs.attn_dropout = None
 
 # `dropout` (type: float) (default: 0.0)
 # Dropout probability after attention in transistor
-_C.train_configs.activation_dropout = 0.0
+_C.train_configs.activation_dropout = None
 
 
 # --------------------------------------------------------------------------- #
