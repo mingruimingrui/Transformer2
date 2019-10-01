@@ -78,12 +78,12 @@ _C.src_spm_configs.character_coverage = 0.9995
 # Should be one of [bpe, unigram, word, char] default bpe
 _C.src_spm_configs.model_type = 'bpe'
 
-# `input_sentence_size` (type: integer) (default: 10000000)
+# `input_sentence_size` (type: integer) (default: 3000000)
 # To ensure that sentencepiece can train in a resonable amount of time,
 # a subset of sentences can be selected
 # By default a maximum of 1e7 (10 million) sentences will be used, to use all
 # sentences, set this value to 0
-_C.src_spm_configs.input_sentence_size = 10000000
+_C.src_spm_configs.input_sentence_size = 3000000
 
 # `add_digit_tokens` (type: boolean) (default: False)
 # Adds 0-9 and ▁0-▁9 to user_defined_symbols
