@@ -7,58 +7,59 @@ class MultiheadAttention(tf.keras.layers.Layer):
     For self-attention in encoder
 
     inputs
-        - query_input (tgt_len, bsz, embed_dim)
-        - key_input (src_len, bsz, embed_dim)
-        - value_input (src_len, bsz, embed_dim)
+        - query_input (tgt_len, bsz, hidden_dim)
+        - key_input (src_len, bsz, hidden_dim)
+        - value_input (src_len, bsz, hidden_dim)
         - key_padding_mask (bsz, src_len) : 1 at positions to mask, 0 at others
     outputs
-        - attn_output (tgt_len, bsz, embed_dim)
+        - attn_output (tgt_len, bsz, hidden_dim)
         - attn_output_weights (bsz, tgt_len, src_len) : requires need_weights
     """
 
     def __init__(
         self,
-        num_heads: int,
-        use_bias: bool = True,
-        attn_dropout: float = 0.0,
+        hidden_dim: int, num_heads: int,
+        use_bias: bool = True, attn_dropout: float = 0.0,
         **kwargs
     ):
         super(MultiheadAttention, self).__init__(**kwargs)
+        self.hidden_dim = hidden_dim
         self.num_heads = num_heads
         self.use_bias = use_bias
         self.attn_dropout = attn_dropout
 
+        self.head_dim = self.hidden_dim // self.num_heads
+        self.scaling = self.head_dim ** -0.5
+        assert self.head_dim * self.num_heads == self.hidden_dim, \
+            'hidden_dim must be divisible by num_heads'
+
     def build(self, input_shapes):
         query_input_shape = input_shapes[0]
-        self.embed_dim = int(query_input_shape[2])
-        self.head_dim = self.embed_dim // self.num_heads
-        self.scaling = self.head_dim ** -0.5
-        assert self.head_dim * self.num_heads == self.embed_dim, \
-            'embed_dim must be divisible by num_heads'
+        input_dim = int(query_input_shape[2])
 
         # Input and output linear layer weights
         self.in_q_proj_weight = self.add_weight(
             name='in_q_proj_weight',
-            shape=[self.embed_dim, self.embed_dim],
+            shape=[input_dim, self.hidden_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
         self.in_k_proj_weight = self.add_weight(
             name='in_k_proj_weight',
-            shape=[self.embed_dim, self.embed_dim],
+            shape=[input_dim, self.hidden_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
         self.in_v_proj_weight = self.add_weight(
             name='in_v_proj_weight',
-            shape=[self.embed_dim, self.embed_dim],
+            shape=[input_dim, self.hidden_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
 
         self.out_proj_weight = self.add_weight(
             name='out_proj_weight',
-            shape=[self.embed_dim, self.embed_dim],
+            shape=[self.hidden_dim, self.hidden_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
@@ -67,26 +68,26 @@ class MultiheadAttention(tf.keras.layers.Layer):
         if self.use_bias:
             self.in_q_proj_bias = self.add_weight(
                 name='in_q_proj_bias',
-                shape=[self.embed_dim],
+                shape=[self.hidden_dim],
                 dtype=self.dtype,
                 initializer=tf.keras.initializers.Constant(0)
             )
             self.in_k_proj_bias = self.add_weight(
                 name='in_k_proj_bias',
-                shape=[self.embed_dim],
+                shape=[self.hidden_dim],
                 dtype=self.dtype,
                 initializer=tf.keras.initializers.Constant(0)
             )
             self.in_v_proj_bias = self.add_weight(
                 name='in_v_proj_bias',
-                shape=[self.embed_dim],
+                shape=[self.hidden_dim],
                 dtype=self.dtype,
                 initializer=tf.keras.initializers.Constant(0)
             )
 
             self.out_proj_bias = self.add_weight(
                 name='out_proj_bias',
-                shape=[self.embed_dim],
+                shape=[self.hidden_dim],
                 dtype=self.dtype,
                 initializer=tf.keras.initializers.Constant(0)
             )
@@ -154,9 +155,9 @@ class MultiheadAttention(tf.keras.layers.Layer):
         # Apply attention weights to value to get outputs
         attn_output = tf.matmul(attn_output_weights, v)
 
-        # Reshape back into (seq_len, batch_size, embed_dim)
+        # Reshape back into (seq_len, batch_size, hidden_dim)
         attn_output = tf.transpose(attn_output, [1, 0, 2])
-        attn_output = tf.reshape(attn_output, [tgt_len, bsz, self.embed_dim])
+        attn_output = tf.reshape(attn_output, [tgt_len, bsz, self.hidden_dim])
 
         # Apply final linear layer
         attn_output = tf.matmul(attn_output, self.out_proj_weight)
@@ -177,14 +178,14 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
     For alignment in decoder
 
     inputs
-        - query_input (tgt_len, bsz, embed_dim)
-        - key_input (src_len, bsz, embed_dim)
-        - value_input (src_len, bsz, embed_dim)
+        - query_input (tgt_len, bsz, hidden_dim)
+        - key_input (src_len, bsz, hidden_dim)
+        - value_input (src_len, bsz, hidden_dim)
         - key_padding_mask (bsz, src_len) : 1 at positions to mask, 0 at others
         - incremental_state (dict)
         - new_state_order (bsz)
     outputs
-        - attn_output (tgt_len, bsz, embed_dim)
+        - attn_output (tgt_len, bsz, hidden_dim)
         - incremental_state (dict)
         - attn_output_weights (bsz, tgt_len, src_len) : requires need_weights
     """
@@ -193,47 +194,48 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
 
     def __init__(
         self,
-        num_heads: int,
-        use_bias: bool = True,
-        attn_dropout: float = 0.0,
+        hidden_dim: int, num_heads: int,
+        use_bias: bool = True, attn_dropout: float = 0.0,
         **kwargs
     ):
-        super(CachedMultiheadAttention, self).__init__(**kwargs)
+        super(MultiheadAttention, self).__init__(**kwargs)
+        self.hidden_dim = hidden_dim
         self.num_heads = num_heads
         self.use_bias = use_bias
         self.attn_dropout = attn_dropout
 
+        self.head_dim = self.hidden_dim // self.num_heads
+        self.scaling = self.head_dim ** -0.5
+        assert self.head_dim * self.num_heads == self.hidden_dim, \
+            'hidden_dim must be divisible by num_heads'
+
     def build(self, input_shapes):
         query_input_shape = input_shapes[0]
-        self.embed_dim = int(query_input_shape[2])
-        self.head_dim = self.embed_dim // self.num_heads
-        self.scaling = self.head_dim ** -0.5
-        assert self.head_dim * self.num_heads == self.embed_dim, \
-            'embed_dim must be divisible by num_heads'
+        input_dim = int(query_input_shape[2])
 
         # Input and output linear layer weights
         self.in_q_proj_weight = self.add_weight(
             name='in_q_proj_weight',
-            shape=[self.embed_dim, self.embed_dim],
+            shape=[input_dim, self.hidden_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
         self.in_k_proj_weight = self.add_weight(
             name='in_k_proj_weight',
-            shape=[self.embed_dim, self.embed_dim],
+            shape=[input_dim, self.hidden_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
         self.in_v_proj_weight = self.add_weight(
             name='in_v_proj_weight',
-            shape=[self.embed_dim, self.embed_dim],
+            shape=[input_dim, self.hidden_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
 
         self.out_proj_weight = self.add_weight(
             name='out_proj_weight',
-            shape=[self.embed_dim, self.embed_dim],
+            shape=[self.hidden_dim, self.hidden_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
@@ -242,26 +244,26 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
         if self.use_bias:
             self.in_q_proj_bias = self.add_weight(
                 name='in_q_proj_bias',
-                shape=[self.embed_dim],
+                shape=[self.hidden_dim],
                 dtype=self.dtype,
                 initializer=tf.keras.initializers.Constant(0)
             )
             self.in_k_proj_bias = self.add_weight(
                 name='in_k_proj_bias',
-                shape=[self.embed_dim],
+                shape=[self.hidden_dim],
                 dtype=self.dtype,
                 initializer=tf.keras.initializers.Constant(0)
             )
             self.in_v_proj_bias = self.add_weight(
                 name='in_v_proj_bias',
-                shape=[self.embed_dim],
+                shape=[self.hidden_dim],
                 dtype=self.dtype,
                 initializer=tf.keras.initializers.Constant(0)
             )
 
             self.out_proj_bias = self.add_weight(
                 name='out_proj_bias',
-                shape=[self.embed_dim],
+                shape=[self.hidden_dim],
                 dtype=self.dtype,
                 initializer=tf.keras.initializers.Constant(0)
             )
@@ -375,9 +377,9 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
         # Apply attention weights to value to get outputs
         attn_output = tf.matmul(attn_output_weights, v)
 
-        # Reshape back into (seq_len, batch_size, embed_dim)
+        # Reshape back into (seq_len, batch_size, hidden_dim)
         attn_output = tf.transpose(attn_output, [1, 0, 2])
-        attn_output = tf.reshape(attn_output, [tgt_len, bsz, self.embed_dim])
+        attn_output = tf.reshape(attn_output, [tgt_len, bsz, self.hidden_dim])
 
         # Apply final linear layer
         attn_output = tf.matmul(attn_output, self.out_proj_weight)
@@ -398,15 +400,15 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
     For incremental self-attention in decoder
 
     inputs
-        - query_input (tgt_len, bsz, embed_dim)
-        - key_input (src_len, bsz, embed_dim)
-        - value_input (src_len, bsz, embed_dim)
+        - query_input (tgt_len, bsz, hidden_dim)
+        - key_input (src_len, bsz, hidden_dim)
+        - value_input (src_len, bsz, hidden_dim)
         - attn_mask (tgt_len, src_len) : 1 at positions to mask, 0 at others
         - key_padding_mask (bsz, src_len) : 1 at positions to mask, 0 at others
         - incremental_state (dict)
         - new_state_order (bsz)
     outputs
-        - attn_output (tgt_len, bsz, embed_dim)
+        - attn_output (tgt_len, bsz, hidden_dim)
         - attn_output_weights (bsz, tgt_len, src_len) : requires need_weights
     """
 
@@ -414,47 +416,48 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
 
     def __init__(
         self,
-        num_heads: int,
-        use_bias: bool = True,
-        attn_dropout: float = 0.0,
+        hidden_dim: int, num_heads: int,
+        use_bias: bool = True, attn_dropout: float = 0.0,
         **kwargs
     ):
-        super(IncrementalMultiheadAttention, self).__init__(**kwargs)
+        super(MultiheadAttention, self).__init__(**kwargs)
+        self.hidden_dim = hidden_dim
         self.num_heads = num_heads
         self.use_bias = use_bias
         self.attn_dropout = attn_dropout
 
+        self.head_dim = self.hidden_dim // self.num_heads
+        self.scaling = self.head_dim ** -0.5
+        assert self.head_dim * self.num_heads == self.hidden_dim, \
+            'hidden_dim must be divisible by num_heads'
+
     def build(self, input_shapes):
         query_input_shape = input_shapes[0]
-        self.embed_dim = int(query_input_shape[2])
-        self.head_dim = self.embed_dim // self.num_heads
-        self.scaling = self.head_dim ** -0.5
-        assert self.head_dim * self.num_heads == self.embed_dim, \
-            'embed_dim must be divisible by num_heads'
+        input_dim = int(query_input_shape[2])
 
         # Input and output linear layer weights
         self.in_q_proj_weight = self.add_weight(
             name='in_q_proj_weight',
-            shape=[self.embed_dim, self.embed_dim],
+            shape=[input_dim, self.hidden_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
         self.in_k_proj_weight = self.add_weight(
             name='in_k_proj_weight',
-            shape=[self.embed_dim, self.embed_dim],
+            shape=[input_dim, self.hidden_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
         self.in_v_proj_weight = self.add_weight(
             name='in_v_proj_weight',
-            shape=[self.embed_dim, self.embed_dim],
+            shape=[input_dim, self.hidden_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
 
         self.out_proj_weight = self.add_weight(
             name='out_proj_weight',
-            shape=[self.embed_dim, self.embed_dim],
+            shape=[self.hidden_dim, self.hidden_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
@@ -463,26 +466,26 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
         if self.use_bias:
             self.in_q_proj_bias = self.add_weight(
                 name='in_q_proj_bias',
-                shape=[self.embed_dim],
+                shape=[self.hidden_dim],
                 dtype=self.dtype,
                 initializer=tf.keras.initializers.Constant(0)
             )
             self.in_k_proj_bias = self.add_weight(
                 name='in_k_proj_bias',
-                shape=[self.embed_dim],
+                shape=[self.hidden_dim],
                 dtype=self.dtype,
                 initializer=tf.keras.initializers.Constant(0)
             )
             self.in_v_proj_bias = self.add_weight(
                 name='in_v_proj_bias',
-                shape=[self.embed_dim],
+                shape=[self.hidden_dim],
                 dtype=self.dtype,
                 initializer=tf.keras.initializers.Constant(0)
             )
 
             self.out_proj_bias = self.add_weight(
                 name='out_proj_bias',
-                shape=[self.embed_dim],
+                shape=[self.hidden_dim],
                 dtype=self.dtype,
                 initializer=tf.keras.initializers.Constant(0)
             )
@@ -597,9 +600,9 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
         # Apply attention weights to value to get outputs
         attn_output = tf.matmul(attn_output_weights, v)
 
-        # Reshape back into (seq_len, batch_size, embed_dim)
+        # Reshape back into (seq_len, batch_size, hidden_dim)
         attn_output = tf.transpose(attn_output, [1, 0, 2])
-        attn_output = tf.reshape(attn_output, [tgt_len, bsz, self.embed_dim])
+        attn_output = tf.reshape(attn_output, [tgt_len, bsz, self.hidden_dim])
 
         # Apply final linear layer
         attn_output = tf.matmul(attn_output, self.out_proj_weight)
