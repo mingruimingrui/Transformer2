@@ -146,7 +146,7 @@ def batch_tokenized_pairs(
     tgt_sent_lengths = []
     for src_token_ids, tgt_token_ids in list_of_tokenized_pairs:
         src_sent_lengths.append(len(src_token_ids))
-        tgt_sent_lengths.append(len(tgt_sent_lengths))
+        tgt_sent_lengths.append(len(tgt_token_ids))
 
     # If optimal batching has to be done, then we first sort the tokenized
     # pairs by the length of the source sequence
@@ -199,7 +199,7 @@ def batch_tokenized_pairs(
         cur_batch_tgt_max_width = max(cur_batch_tgt_max_width, tgt_width)
 
     # Append last batch if non empty
-    if len(cur_batch_tgt_max_width) > 0:
+    if len(cur_batch_idxs) > 0:
         batches_idxs.append(cur_batch_idxs)
 
     # Shuffle batches if needed
