@@ -12,7 +12,7 @@ import multiprocessing
 from tqdm import tqdm
 from six import integer_types
 
-from transformers_2.utils.io_utils import open_file
+from transformers_2.utils.io_utils import open_txt_file
 
 __all__ = ['count_lines', 'map_file']
 
@@ -28,8 +28,8 @@ def _map_file_worker_fn(
     start_line, end_line,
     show_pbar=False
 ):
-    with open_file(out_filepath, 'w') as fout:
-        with open_file(in_filepath, 'r') as fin:
+    with open_txt_file(out_filepath, 'w') as fout:
+        with open_txt_file(in_filepath, 'r') as fin:
             for _ in range(start_line):
                 fin.readline()
             iterable = range(end_line - start_line)
