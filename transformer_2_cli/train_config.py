@@ -3,7 +3,7 @@ Configurables for training
 """
 
 from copy import deepcopy
-from transformers_2.utils.config_system import ConfigSystem
+from transformer_2.utils.config_system import ConfigSystem
 
 __all__ = ['make_config']
 

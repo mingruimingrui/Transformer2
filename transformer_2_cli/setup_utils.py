@@ -1,7 +1,7 @@
 import os
 import logging
 from six import string_types
-from transformers_2.utils.io_utils import write_yaml_to_file
+from transformer_2.utils.io_utils import write_yaml_to_file
 
 logger = logging.getLogger()
 
