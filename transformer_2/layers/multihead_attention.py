@@ -520,8 +520,7 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
 
     def call(self, inputs, training=None, need_weights=None):
         (
-            query_input, key_input, value_input,
-            attn_mask, key_padding_mask,
+            query_input, key_input, value_input, attn_mask,
             incremental_state, new_state_order
         ) = inputs
 
@@ -580,16 +579,6 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
         # Don't attend to masked positions
         attn_output_weights = attn_output_weights - self.INF * \
             tf.cast(attn_mask, attn_output_weights.dtype)
-
-        # Don't attend to padding symbols
-        key_padding_mask = \
-            tf.expand_dims(tf.expand_dims(key_padding_mask, 1), 2)
-        attn_output_weights = tf.reshape(
-            attn_output_weights, [bsz, self.num_heads, tgt_len, src_len])
-        attn_output_weights = attn_output_weights - self.INF * \
-            tf.cast(key_padding_mask, attn_output_weights.dtype)
-        attn_output_weights = tf.reshape(
-            attn_output_weights, [bsz * self.num_heads, tgt_len, src_len])
 
         # Apply softmax to get attention distribution
         attn_output_weights = tf.nn.softmax(attn_output_weights, axis=2)
