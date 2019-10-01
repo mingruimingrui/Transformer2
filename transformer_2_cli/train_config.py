@@ -86,7 +86,7 @@ _C.src_spm_configs.model_type = 'bpe'
 _C.src_spm_configs.input_sentence_size = 3000000
 
 # `add_digit_tokens` (type: boolean) (default: False)
-# Adds 0-9 and ▁0-▁9 to user_defined_symbols
+# Adds 0-9 to user_defined_symbols
 _C.src_spm_configs.add_digit_tokens = False
 
 # The sentencepiece configs for the target language
