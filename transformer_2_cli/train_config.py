@@ -89,6 +89,9 @@ _C.src_spm_configs.input_sentence_size = 3000000
 # Adds 0-9 to user_defined_symbols
 _C.src_spm_configs.add_digit_tokens = False
 
+# `user_defined_symbols` (type: list[str]) (default: [])
+_C.src_spm_configs.user_defined_symbols = []
+
 # The sentencepiece configs for the target language
 # options are the same as for source language
 _C.tgt_spm_configs = deepcopy(_C.src_spm_configs)

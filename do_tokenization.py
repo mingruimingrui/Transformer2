@@ -56,7 +56,7 @@ def do_tokenization(config):
         else:
             logger.info('Starting to train spm model')
 
-            user_defined_symbols = []
+            user_defined_symbols = spm_configs.user_defined_symbols
             if spm_configs.add_digit_tokens:
                 # user_defined_symbols = ['▁{}'.format(i) for i in range(10)]
                 user_defined_symbols += ['{}'.format(i) for i in range(10)]
