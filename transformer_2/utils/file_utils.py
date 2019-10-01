@@ -12,7 +12,7 @@ import multiprocessing
 from tqdm import tqdm
 from six import integer_types
 
-from transformers_2.utils.io_utils import open_txt_file
+from transformer_2.utils.io_utils import open_txt_file
 
 __all__ = ['count_lines', 'map_file']
 
