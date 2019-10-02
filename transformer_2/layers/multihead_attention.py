@@ -198,7 +198,7 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
         use_bias: bool = True, attn_dropout: float = 0.0,
         **kwargs
     ):
-        super(MultiheadAttention, self).__init__(**kwargs)
+        super(CachedMultiheadAttention, self).__init__(**kwargs)
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
         self.use_bias = use_bias
@@ -420,7 +420,7 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
         use_bias: bool = True, attn_dropout: float = 0.0,
         **kwargs
     ):
-        super(MultiheadAttention, self).__init__(**kwargs)
+        super(IncrementalMultiheadAttention, self).__init__(**kwargs)
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
         self.use_bias = use_bias
