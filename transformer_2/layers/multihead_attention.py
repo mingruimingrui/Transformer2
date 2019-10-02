@@ -507,14 +507,14 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
         return incr_decoding_utils.get_state(
             module_instance=self,
             incremental_state=incremental_state,
-            key_postfix=self._incremental_key_postfix
+            key_postfix=self._key_postfix
         ) or {}
 
     def _set_saved_state(self, incremental_state, value):
         incr_decoding_utils.set_state(
             module_instance=self,
             incremental_state=incremental_state,
-            key_postfix=self._incremental_key_postfix,
+            key_postfix=self._key_postfix,
             value=value
         )
 
