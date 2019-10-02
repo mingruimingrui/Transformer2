@@ -2,7 +2,7 @@
 Configurables for Transformer
 """
 
-from transformers_2.utils.config_system import ConfigSystem
+from transformer_2.utils.config_system import ConfigSystem
 
 __all__ = ['make_config']
 
@@ -32,13 +32,13 @@ _C.encoder_embed_dim = 512
 _C.encoder_hidden_dim = 512
 
 # The size of the hidden states in the encoder transistor
-_C.encoder_transistor_dim = 2048
+_C.encoder_transistor_dim = 1024
 
 # The number of multi-head attention layers
 _C.encoder_num_layers = 6
 
 # The number of heads in multi-head attention
-_C.encoder_num_heads = 8
+_C.encoder_num_heads = 4
 
 # Should bias be used in the encoder
 _C.encoder_use_bias = True
@@ -65,16 +65,16 @@ _C.decoder_padding_idx = None
 _C.decoder_embed_dim = 512
 
 # The size of the hidden states embeddings in the decoder
-_C.encoder_hidden_dim = 512
+_C.decoder_hidden_dim = 512
 
 # The size of the hidden states in the decoder transistor
-_C.decoder_transistor_dim = 2048
+_C.decoder_transistor_dim = 1024
 
 # The number of multi-head attention layers
 _C.decoder_num_layers = 6
 
 # The number of heads in multi-head attention
-_C.decoder_num_heads = 8
+_C.decoder_num_heads = 4
 
 # Should bias be used in the decoder
 _C.decoder_use_bias = True
