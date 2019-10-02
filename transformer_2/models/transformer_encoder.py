@@ -35,7 +35,7 @@ class TransformerEncoderLayer(tf.keras.Model):
             trainable=True, **kwargs
         )
         self.transistor = Transistor(
-            inner_dim=transistor_dim, activation_fn=activation_fn,
+            inner_dim=transistor_dim, activation=activation_fn,
             use_bias=use_bias, activation_dropout=activation_dropout,
             trainable=True, **kwargs
         )

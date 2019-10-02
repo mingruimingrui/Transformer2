@@ -42,7 +42,7 @@ class TransformerDecoderLayer(tf.keras.Model):
             trainable=True, **kwargs
         )
         self.transistor = Transistor(
-            inner_dim=transistor_dim, activation_fn=activation_fn,
+            inner_dim=transistor_dim, activation=activation_fn,
             use_bias=use_bias, activation_dropout=activation_dropout,
             trainable=True, **kwargs
         )
@@ -222,9 +222,15 @@ class TransformerDecoder(tf.keras.Model):
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
 
-        x = tf.matmul(
-            x, self.out_token_embeddings.embeddings,
-            transpose_b=True
-        )
+        if self.share_input_output_embeddings:
+            x = tf.matmul(
+                x, self.token_embeddings.embeddings,
+                transpose_b=True
+            )
+        else:
+            x = tf.matmul(
+                x, self.out_token_embeddings.embeddings,
+                transpose_b=True
+            )
 
         return x, incremental_state
