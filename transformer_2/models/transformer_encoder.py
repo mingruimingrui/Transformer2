@@ -146,6 +146,6 @@ class TransformerEncoder(tf.keras.Model):
             x = layer((x, padding_mask), training=training)
 
         if self.normalize_before:
-            self.layer_norm(x)
+            x = self.layer_norm(x)
 
         return x, padding_mask

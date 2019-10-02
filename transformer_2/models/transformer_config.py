@@ -105,8 +105,8 @@ _C.activation_dropout = 0.0
 _C.activation_fn = 'relu'
 
 # Should layer norm be applied before multi-headed attention?
-# Default is after
-_C.normalize_before = False
+# Default is before
+_C.normalize_before = True
 
 # Should encoder input embeddings, decoder input embeddings and decoder output
 # embeddings be the same tensor?
