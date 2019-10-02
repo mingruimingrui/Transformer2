@@ -5,15 +5,16 @@ import numpy as np
 from typing import List, Tuple
 
 
-def pad_sample(sample, width, padding_token):
+def pad_sample(sample, width, padding_token, left_pad=True):
     """ Left pad a sample to a given width """
     sample = np.array(sample)
     padding = [padding_token] * (width - len(sample))
-    return np.concatenate([padding, sample]).astype(sample.dtype)
+    padded_sample = [padding, sample] if left_pad else [sample, padding]
+    return np.concatenate(padded_sample).astype(sample.dtype)
 
 
-def form_batch_into_array(batch, max_width, padding_token):
-    batch = [pad_sample(s, max_width, padding_token) for s in batch]
+def form_batch_into_array(batch, max_width, padding_token, left_pad=True):
+    batch = [pad_sample(s, max_width, padding_token, left_pad) for s in batch]
     return np.array(batch)
 
 
@@ -201,6 +202,8 @@ def batch_tokenized_pairs(
     # Append last batch if non empty
     if len(cur_batch_idxs) > 0:
         batches_idxs.append(cur_batch_idxs)
+    if do_optimal_batching:
+        batches_idxs = batches_idxs[::-1]
 
     # Shuffle batches if needed
     if shuffle:
@@ -214,11 +217,13 @@ def batch_tokenized_pairs(
 
         src_batch_tokens = form_batch_into_array(
             batch=[list_of_tokenized_pairs[i][0] for i in idxs],
-            max_width=max(src_batch_lengths), padding_token=src_padding_idx
+            max_width=max(src_batch_lengths), padding_token=src_padding_idx,
+            left_pad=True
         )
         tgt_batch_tokens = form_batch_into_array(
             batch=[list_of_tokenized_pairs[i][1] for i in idxs],
-            max_width=max(tgt_batch_lengths), padding_token=tgt_padding_idx
+            max_width=max(tgt_batch_lengths), padding_token=tgt_padding_idx,
+            left_pad=False
         )
 
         batches.append((
