@@ -90,7 +90,7 @@ def _reader_batcher_subprocess_loop(
     # chunk of dataset samples
     corpus_files = [
         open(src_corpus_path, 'rb'),
-        open(src_corpus_path, 'rb')
+        open(tgt_corpus_path, 'rb')
     ]
 
     def close_corpus_files():
