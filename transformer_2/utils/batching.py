@@ -204,7 +204,7 @@ def batch_tokenized_pairs(
 
     # Shuffle batches if needed
     if shuffle:
-        random.shuffle(cur_batch_idxs)
+        random.shuffle(batches_idxs)
 
     # Gather batches from idxs
     batches = []
