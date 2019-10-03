@@ -113,9 +113,9 @@ class MultiheadAttention(tf.keras.layers.Layer):
         bsz = query_input_shape[1]
 
         # Compute query, key and value tensors
-        q = tf.matmul(query_input, self.in_q_proj_weight)
-        k = tf.matmul(key_input, self.in_k_proj_weight)
-        v = tf.matmul(value_input, self.in_v_proj_weight)
+        q = tf.matmul(query_input, self.in_q_proj_weight, transpose_b=True)
+        k = tf.matmul(key_input, self.in_k_proj_weight, transpose_b=True)
+        v = tf.matmul(value_input, self.in_v_proj_weight, transpose_b=True)
         if self.use_bias:
             q += self.in_q_proj_bias
             k += self.in_k_proj_bias
@@ -160,7 +160,10 @@ class MultiheadAttention(tf.keras.layers.Layer):
         attn_output = tf.reshape(attn_output, [tgt_len, bsz, self.hidden_dim])
 
         # Apply final linear layer
-        attn_output = tf.matmul(attn_output, self.out_proj_weight)
+        attn_output = tf.matmul(
+            attn_output, self.out_proj_weight,
+            transpose_b=True
+        )
         if self.use_bias:
             attn_output += self.out_proj_bias
 
@@ -310,7 +313,7 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
         saved_state = self._get_saved_state(incremental_state)
 
         # Compute query tensor
-        q = tf.matmul(query_input, self.in_q_proj_weight)
+        q = tf.matmul(query_input, self.in_q_proj_weight, transpose_b=True)
         if self.use_bias:
             q += self.in_q_proj_bias
         q *= self.scaling
@@ -332,8 +335,8 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
             v = tf.reshape(v, [bsz * self.num_heads, -1, self.head_dim])
         else:
             # Compute key and value tensors
-            k = tf.matmul(key_input, self.in_k_proj_weight)
-            v = tf.matmul(value_input, self.in_v_proj_weight)
+            k = tf.matmul(key_input, self.in_k_proj_weight, transpose_b=True)
+            v = tf.matmul(value_input, self.in_v_proj_weight, transpose_b=True)
 
             if self.use_bias:
                 k += self.in_k_proj_bias
@@ -382,7 +385,10 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
         attn_output = tf.reshape(attn_output, [tgt_len, bsz, self.hidden_dim])
 
         # Apply final linear layer
-        attn_output = tf.matmul(attn_output, self.out_proj_weight)
+        attn_output = tf.matmul(
+            attn_output, self.out_proj_weight,
+            transpose_b=True
+        )
         if self.use_bias:
             attn_output += self.out_proj_bias
 
@@ -532,9 +538,9 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
         saved_state = self._get_saved_state(incremental_state)
 
         # Compute query, key and value tensor
-        q = tf.matmul(query_input, self.in_q_proj_weight)
-        k = tf.matmul(key_input, self.in_k_proj_weight)
-        v = tf.matmul(value_input, self.in_v_proj_weight)
+        q = tf.matmul(query_input, self.in_q_proj_weight, transpose_b=True)
+        k = tf.matmul(key_input, self.in_k_proj_weight, transpose_b=True)
+        v = tf.matmul(value_input, self.in_v_proj_weight, transpose_b=True)
         if self.use_bias:
             q += self.in_q_proj_bias
             k += self.in_k_proj_bias
@@ -594,7 +600,10 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
         attn_output = tf.reshape(attn_output, [tgt_len, bsz, self.hidden_dim])
 
         # Apply final linear layer
-        attn_output = tf.matmul(attn_output, self.out_proj_weight)
+        attn_output = tf.matmul(
+            attn_output, self.out_proj_weight,
+            transpose_b=True
+        )
         if self.use_bias:
             attn_output += self.out_proj_bias
 

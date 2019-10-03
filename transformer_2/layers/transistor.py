@@ -25,13 +25,15 @@ class Transistor(tf.keras.layers.Layer):
 
         self.kernel_0 = self.add_weight(
             name='kernel_0',
-            shape=[last_dim, self.inner_dim],
+            # shape=[last_dim, self.inner_dim],
+            shape=[self.inner_dim, last_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
         self.kernel_1 = self.add_weight(
             name='kernel_1',
-            shape=[self.inner_dim, last_dim],
+            # shape=[self.inner_dim, last_dim],
+            shape=[last_dim, self.inner_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
@@ -53,13 +55,13 @@ class Transistor(tf.keras.layers.Layer):
         super(Transistor, self).build(input_shape)
 
     def call(self, x, training=None):
-        x = tf.matmul(x, self.kernel_0)
+        x = tf.matmul(x, self.kernel_0, transpose_b=True)
         if self.use_bias:
             x += self.bias_0
         if self.activation is not None:
             x = self.activation(x)
         x = tf.nn.dropout(x, rate=self.activation_dropout) if training else x
-        x = tf.matmul(x, self.kernel_1)
+        x = tf.matmul(x, self.kernel_1, transpose_b=True)
         if self.use_bias:
             x += self.bias_1
         return x
