@@ -30,21 +30,29 @@ class TransformerDecoderLayer(tf.keras.Model):
         self.normalize_before = normalize_before
 
         # Layers
-        self.layer_norm = tf.keras.layers.LayerNormalization(**kwargs)
-        self.attn_layer = IncrementalMultiheadAttention(
+        self.self_attn_layer = IncrementalMultiheadAttention(
             hidden_dim=hidden_dim, num_heads=num_heads,
             use_bias=use_bias, attn_dropout=attn_dropout,
-            trainable=True, **kwargs
+            trainable=True, name='self_attn', **kwargs
+        )
+        self.self_attn_layer_norm = tf.keras.layers.LayerNormalization(
+            name='self_attn_layer_norm', **kwargs
         )
         self.encoder_attn_layer = CachedMultiheadAttention(
             hidden_dim=hidden_dim, num_heads=num_heads,
             use_bias=use_bias, attn_dropout=attn_dropout,
-            trainable=True, **kwargs
+            trainable=True, name='encoder_attn', **kwargs
+        )
+        self.encoder_attn_layer_norm = tf.keras.layers.LayerNormalization(
+            name='encoder_attn_layer_norm', **kwargs
         )
         self.transistor = Transistor(
             inner_dim=transistor_dim, activation=activation_fn,
             use_bias=use_bias, activation_dropout=activation_dropout,
-            trainable=True, **kwargs
+            trainable=True, name='transistor', **kwargs
+        )
+        self.layer_norm = tf.keras.layers.LayerNormalization(
+            name='layer_norm', **kwargs
         )
 
     def call(self, inputs, training=None):
@@ -56,20 +64,20 @@ class TransformerDecoderLayer(tf.keras.Model):
 
         # Apply self attention
         residual = x
-        x = self.layer_norm(x) if self.normalize_before else x
+        x = self.self_attn_layer_norm(x) if self.normalize_before else x
 
-        x, incremental_state = self.attn_layer((
+        x, incremental_state = self.self_attn_layer((
             x, x, x, attn_mask,
             incremental_state, new_state_order
         ), training=training)
 
         x = tf.nn.dropout(x, rate=self.dropout) if training else x
         x += residual
-        x = x if self.normalize_before else self.layer_norm(x)
+        x = x if self.normalize_before else self.self_attn_layer_norm(x)
 
         # Apply attn on encoder out
         residual = x
-        x = self.layer_norm(x) if self.normalize_before else x
+        x = self.encoder_attn_layer_norm(x) if self.normalize_before else x
 
         x, incremental_state = self.encoder_attn_layer((
             x, encoder_out, encoder_out, encoder_padding_mask,
@@ -78,7 +86,7 @@ class TransformerDecoderLayer(tf.keras.Model):
 
         x = tf.nn.dropout(x, rate=self.dropout) if training else x
         x += residual
-        x = x if self.normalize_before else self.layer_norm(x)
+        x = x if self.normalize_before else self.encoder_attn_layer_norm(x)
 
         # Apply fc1 and fc2
         residual = x
@@ -159,12 +167,9 @@ class TransformerDecoder(tf.keras.Model):
                     dtype=dtype.name
                 )
             self.position_embeddings = tf.keras.layers.Embedding(
-                input_dim=max_positions,
-                output_dim=input_dim,
-                mask_zero=False,
+                input_dim=max_positions, output_dim=input_dim, mask_zero=False,
                 embeddings_initializer=positional_embeddings_initializer,
-                trainable=learned_pos_embeds,
-                **kwargs
+                trainable=learned_pos_embeds, name='pos_embeds', **kwargs
             )
             # Initialize layer here to generate positional embedding weights
             self.position_embeddings(tf.constant([[0]]))
@@ -178,10 +183,12 @@ class TransformerDecoder(tf.keras.Model):
                 dropout=dropout, attn_dropout=attn_dropout,
                 activation_dropout=activation_dropout,
                 activation_fn=activation_fn, normalize_before=normalize_before,
-                name='decoder_layer_{}'.format(i), **kwargs
+                name='layer_{}'.format(i), **kwargs
             ))
         if normalize_before:
-            self.layer_norm = tf.keras.layers.LayerNormalization(**kwargs)
+            self.layer_norm = tf.keras.layers.LayerNormalization(
+                name='layer_norm', **kwargs
+            )
 
     def call(self, inputs, training=None):
         (

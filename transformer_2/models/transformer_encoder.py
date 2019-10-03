@@ -28,16 +28,21 @@ class TransformerEncoderLayer(tf.keras.Model):
         self.normalize_before = normalize_before
 
         # Layers
-        self.layer_norm = tf.keras.layers.LayerNormalization(**kwargs)
         self.attn_layer = MultiheadAttention(
             hidden_dim=hidden_dim, num_heads=num_heads,
             use_bias=use_bias, attn_dropout=attn_dropout,
-            trainable=True, **kwargs
+            trainable=True, name='self_attn', **kwargs
+        )
+        self.attn_layer_norm = tf.keras.layers.LayerNormalization(
+            name='self_attn_layer_norm', **kwargs
         )
         self.transistor = Transistor(
             inner_dim=transistor_dim, activation=activation_fn,
             use_bias=use_bias, activation_dropout=activation_dropout,
-            trainable=True, **kwargs
+            trainable=True, name='transistor', **kwargs
+        )
+        self.layer_norm = tf.keras.layers.LayerNormalization(
+            name='layer_norm', **kwargs
         )
 
     def call(self, inputs, training=None):
@@ -45,13 +50,13 @@ class TransformerEncoderLayer(tf.keras.Model):
 
         # Apply multihead attn
         residual = x
-        x = self.layer_norm(x) if self.normalize_before else x
+        x = self.attn_layer_norm(x) if self.normalize_before else x
 
         x = self.attn_layer((x, x, x, key_padding_mask), training=training)
 
         x = tf.nn.dropout(x, rate=self.dropout) if training else x
         x += residual
-        x = x if self.normalize_before else self.layer_norm(x)
+        x = x if self.normalize_before else self.attn_layer_norm(x)
 
         # Apply transistor
         residual = x
@@ -109,7 +114,7 @@ class TransformerEncoder(tf.keras.Model):
             self.position_embeddings = tf.keras.layers.Embedding(
                 input_dim=max_positions, output_dim=embed_dim, mask_zero=False,
                 embeddings_initializer=positional_embeddings_initializer,
-                trainable=learned_pos_embeds, **kwargs
+                trainable=learned_pos_embeds, name='pos_embeds', **kwargs
             )
             # Initialize layer here to generate positional embedding weights
             self.position_embeddings(tf.constant([[0]]))
@@ -121,10 +126,12 @@ class TransformerEncoder(tf.keras.Model):
                 dropout=dropout, attn_dropout=attn_dropout,
                 activation_dropout=activation_dropout,
                 activation_fn=activation_fn, normalize_before=normalize_before,
-                name='encoder_layer_{}'.format(i), **kwargs
+                name='layer_{}'.format(i), **kwargs
             ))
         if normalize_before:
-            self.layer_norm = tf.keras.layers.LayerNormalization(**kwargs)
+            self.layer_norm = tf.keras.layers.LayerNormalization(
+                name='layer_norm', **kwargs
+            )
 
     def call(self, inputs, training=None):
         src_tokens, src_lengths = inputs

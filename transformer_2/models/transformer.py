@@ -10,7 +10,6 @@ class Transformer(tf.keras.Model):
     def __init__(self, encoder, decoder, config, name='transformer', **kwargs):
         super(Transformer, self).__init__(name=name, **kwargs)
         assert isinstance(encoder, TransformerEncoder)
-
         assert isinstance(decoder, TransformerDecoder)
         self.encoder = encoder
         self.decoder = decoder
@@ -46,7 +45,7 @@ class Transformer(tf.keras.Model):
         encoder_token_embeddings = tf.keras.layers.Embedding(
             input_dim=config.encoder_vocab_size,
             output_dim=config.encoder_embed_dim,
-            mask_zero=False, **kwargs)
+            mask_zero=False, name='token_embeds', **kwargs)
 
         # Make decoder input and output embeddings
         if config.share_all_embeddings:
@@ -62,7 +61,7 @@ class Transformer(tf.keras.Model):
             decoder_in_token_embeddings = tf.keras.layers.Embedding(
                 input_dim=config.decoder_vocab_size,
                 output_dim=config.decoder_embed_dim,
-                mask_zero=False, **kwargs)
+                mask_zero=False, name='token_embeds', **kwargs)
 
             if config.share_decoder_input_output_embed:
                 decoder_out_token_embeddings = decoder_in_token_embeddings
@@ -70,7 +69,7 @@ class Transformer(tf.keras.Model):
                 decoder_out_token_embeddings = tf.keras.layers.Embedding(
                     input_dim=config.decoder_vocab_size,
                     output_dim=config.decoder_embed_dim,
-                    mask_zero=False, **kwargs)
+                    mask_zero=False, name='out_token_embeds', **kwargs)
 
         encoder = TransformerEncoder(
             token_embeddings=encoder_token_embeddings,
