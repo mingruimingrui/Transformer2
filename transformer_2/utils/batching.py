@@ -18,89 +18,90 @@ def form_batch_into_array(batch, max_width, padding_token, left_pad=True):
     return np.array(batch)
 
 
-# def batch_tokenized_sents(
-#     tokenized_sents: List[List[int]],
-#     padding_idx: int,
-#     max_positions: int = 1024,
-#     max_batch_tokens: int = 1000,
-#     max_batch_sentences: int = 100,
-#     shuffle: bool = False,
-#     do_optimal_batching: bool = False
-# ):
-#     sent_lengths = [len(token_ids) for token_ids in tokenized_sents]
+def batch_tokenized_sents(
+    tokenized_sents: List[List[int]],
+    padding_idx: int,
+    max_positions: int = 1024,
+    max_batch_tokens: int = 1000,
+    max_batch_sentences: int = 100,
+    shuffle: bool = False,
+    do_optimal_batching: bool = False
+):
+    # We're going to do some indexing make sure this is a list,
+    # not generator/iterator
+    tokenized_sents = list(tokenized_sents)
 
-#     # If optimal batching has to be done, then we first sort the tokenized
-#     # pairs by the length of the source sequence
-#     if do_optimal_batching:
-#         all_idxs = np.argsort(-np.array(sent_lengths))
-#     else:
-#         all_idxs = range(len(tokenized_sents))
+    # Gather sentence lengths
+    sent_lengths = [len(token_ids) for token_ids in tokenized_sents]
 
-#     # Create placeholders for all batches and cur batch
-#     batches_idxs = []
-#     ignored_idxs = []
+    # If optimal batching has to be done, then we first sort the tokenized
+    # pairs by the length of the source sequence
+    if do_optimal_batching:
+        all_idxs = np.argsort(-np.array(sent_lengths))
+    else:
+        all_idxs = range(len(tokenized_sents))
 
-#     cur_batch_idxs = []
-#     cur_batch_max_width = 0
+    # Create placeholders for all batches and cur batch
+    batches_idxs = []
+    ignored_idxs = []
 
-#     for i in all_idxs:
-#         sample_width = len(tokenized_sents[i])
+    cur_batch_idxs = []
+    cur_batch_max_width = 0
 
-#         # Ignore sample if too long or is empty
-#         if (
-#             sample_width > max_batch_tokens or
-#             sample_width > max_positions or
-#             sample_width == 0
-#         ):
-#             ignored_idxs.append(i)
-#             continue
+    for i in all_idxs:
+        sample_width = len(tokenized_sents[i])
 
-#         # Determine if new sample can be appended to cur batch
-#         expected_batch_size = (len(cur_batch_idxs) + 1) * \
-#             max(cur_batch_max_width, sample_width)
-#         should_not_append_new_sample_to_cur_batch = \
-#             len(cur_batch_idxs) >= max_batch_sentences or \
-#             expected_batch_size > max_batch_tokens
-#         if should_not_append_new_sample_to_cur_batch:
-#             # Append cur batch to batches
-#             batches_idxs.append(cur_batch_idxs)
-#             # Reinit cur batch
-#             cur_batch_idxs = []
-#             cur_batch_max_width = 0
+        # Ignore sample if too long or is empty
+        if (
+            sample_width > max_batch_tokens or
+            sample_width > max_positions or
+            sample_width == 0
+        ):
+            ignored_idxs.append(i)
+            continue
 
-#         # Append cur sample to cur batch
-#         cur_batch_idxs.append(i)
-#         cur_batch_max_width = max(cur_batch_max_width, sample_width)
+        # Determine if new sample can be appended to cur batch
+        expected_max_width = max(cur_batch_max_width, sample_width)
+        expected_batch_size = (len(cur_batch_idxs) + 1) * expected_max_width
+        if (
+            len(cur_batch_idxs) >= max_batch_sentences or
+            expected_batch_size > max_batch_tokens
+        ):
+            # Append cur batch to batches
+            batches_idxs.append(cur_batch_idxs)
 
-#     # Append last batch if non empty
-#     if len(cur_batch_idxs) > 0:
-#         batches_idxs.append(cur_batch_idxs)
+            # Reinit cur batch
+            cur_batch_idxs = []
+            cur_batch_max_width = 0
 
-#     # Shuffle batches if needed
-#     if shuffle:
-#         random.shuffle(batches_idxs)
+        # Append cur sample to cur batch
+        cur_batch_idxs.append(i)
+        cur_batch_max_width = max(cur_batch_max_width, sample_width)
 
-#     # Gather batches and batches_lengths from idxs
-#     batches = []
-#     batches_lengths = []
+    # Append last batch if non empty
+    if len(cur_batch_idxs) > 0:
+        batches_idxs.append(cur_batch_idxs)
 
-#     for idxs in batches_idxs:
-#         cur_batch_lengths = [sent_lengths[i] for i in idxs]
-#         cur_batch = form_batch_into_array(
-#             batch=[tokenized_sents[i] for i in idxs],
-#             max_width=max(cur_batch_lengths),
-#             padding_token=padding_idx
-#         )
+    # Shuffle batches if needed
+    if shuffle:
+        random.shuffle(batches_idxs)
 
-#         batches.append(cur_batch)
-#         batches_lengths.append(cur_batch_lengths)
+    # Gather batches and batches_lengths from idxs
+    batches = []
 
-#     ignored_tokenized_sents = [tokenized_sents[i] for i in ignored_idxs]
+    for idxs in batches_idxs:
+        cur_batch_lengths = [sent_lengths[i] for i in idxs]
+        cur_batch = form_batch_into_array(
+            batch=[tokenized_sents[i] for i in idxs],
+            max_width=max(cur_batch_lengths), padding_token=padding_idx,
+            left_pad=True
+        )
 
-#     return (
-#         batches_idxs, batches, batches_lengths,
-#         ignored_idxs, ignored_tokenized_sents
-#     )
+        batches.append((cur_batch, cur_batch_lengths))
+
+    ignored_tokenized_sents = [tokenized_sents[i] for i in ignored_idxs]
+
+    return (batches_idxs, batches, ignored_idxs, ignored_tokenized_sents)
 
 
 # def unbatch_tokenized_sents(
