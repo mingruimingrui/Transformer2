@@ -1,5 +1,4 @@
 import tensorflow as tf
-from transformer_2.utils import incr_decoding_utils
 
 
 class MultiheadAttention(tf.keras.layers.Layer):
@@ -40,19 +39,19 @@ class MultiheadAttention(tf.keras.layers.Layer):
         # Input and output linear layer weights
         self.in_q_proj_weight = self.add_weight(
             name='in_q_proj_weight',
-            shape=[input_dim, self.hidden_dim],
+            shape=[self.hidden_dim, input_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
         self.in_k_proj_weight = self.add_weight(
             name='in_k_proj_weight',
-            shape=[input_dim, self.hidden_dim],
+            shape=[self.hidden_dim, input_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
         self.in_v_proj_weight = self.add_weight(
             name='in_v_proj_weight',
-            shape=[input_dim, self.hidden_dim],
+            shape=[self.hidden_dim, input_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
@@ -185,15 +184,11 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
         - key_input (src_len, bsz, hidden_dim)
         - value_input (src_len, bsz, hidden_dim)
         - key_padding_mask (bsz, src_len) : 1 at positions to mask, 0 at others
-        - incremental_state (dict)
         - new_state_order (bsz)
     outputs
         - attn_output (tgt_len, bsz, hidden_dim)
-        - incremental_state (dict)
         - attn_output_weights (bsz, tgt_len, src_len) : requires need_weights
     """
-
-    _key_postfix = 'cached_state'
 
     def __init__(
         self,
@@ -212,6 +207,9 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
         assert self.head_dim * self.num_heads == self.hidden_dim, \
             'hidden_dim must be divisible by num_heads'
 
+        self._cached_key = None
+        self._cached_value = None
+
     def build(self, input_shapes):
         query_input_shape = input_shapes[0]
         input_dim = int(query_input_shape[2])
@@ -219,19 +217,19 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
         # Input and output linear layer weights
         self.in_q_proj_weight = self.add_weight(
             name='in_q_proj_weight',
-            shape=[input_dim, self.hidden_dim],
+            shape=[self.hidden_dim, input_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
         self.in_k_proj_weight = self.add_weight(
             name='in_k_proj_weight',
-            shape=[input_dim, self.hidden_dim],
+            shape=[self.hidden_dim, input_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
         self.in_v_proj_weight = self.add_weight(
             name='in_v_proj_weight',
-            shape=[input_dim, self.hidden_dim],
+            shape=[self.hidden_dim, input_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
@@ -284,25 +282,21 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
 
         super(CachedMultiheadAttention, self).build(input_shapes)
 
-    def _get_saved_state(self, incremental_state):
-        return incr_decoding_utils.get_state(
-            module_instance=self,
-            incremental_state=incremental_state,
-            key_postfix=self._key_postfix
-        ) or {}
+    def _get_saved_state(self):
+        return self._cached_key, self._cached_value
 
-    def _set_saved_state(self, incremental_state, value):
-        incr_decoding_utils.set_state(
-            module_instance=self,
-            incremental_state=incremental_state,
-            key_postfix=self._key_postfix,
-            value=value
-        )
+    def _set_saved_state(self, k, v):
+        self._cached_key = k
+        self._cached_value = v
+
+    def clear_cached_states(self):
+        self._cached_key = None
+        self._cached_value = None
 
     def call(self, inputs, training=None, need_weights=None):
         (
-            query_input, key_input, value_input, key_padding_mask,
-            incremental_state, new_state_order
+            query_input, key_input, value_input,
+            key_padding_mask, new_state_order
         ) = inputs
 
         query_input_shape = tf.shape(query_input)
@@ -310,7 +304,7 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
         bsz = query_input_shape[1]
 
         # Get previous state
-        saved_state = self._get_saved_state(incremental_state)
+        prev_key, prev_value = self._get_saved_state()
 
         # Compute query tensor
         q = tf.matmul(query_input, self.in_q_proj_weight, transpose_b=True)
@@ -322,10 +316,10 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
         q = tf.reshape(q, [-1, bsz * self.num_heads, self.head_dim])
         q = tf.transpose(q, [1, 0, 2])
 
-        if 'prev_key' in saved_state:
+        if prev_key is not None:
             # Gather key and value tensor from saved_state
-            k = saved_state['prev_key']
-            v = saved_state['prev_value']
+            k = prev_key
+            v = prev_value
 
             k = tf.gather(k, new_state_order)
             v = tf.gather(v, new_state_order)
@@ -333,6 +327,7 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
             # Reshape into (batch_size * num_heads, seq_len, head_dim)
             k = tf.reshape(k, [bsz * self.num_heads, -1, self.head_dim])
             v = tf.reshape(v, [bsz * self.num_heads, -1, self.head_dim])
+
         else:
             # Compute key and value tensors
             k = tf.matmul(key_input, self.in_k_proj_weight, transpose_b=True)
@@ -348,12 +343,13 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
             v = tf.reshape(v, [-1, bsz * self.num_heads, self.head_dim])
             v = tf.transpose(v, [1, 0, 2])
 
-        # Save key and value tensor to memory
-        saved_kv_shape = [bsz, self.num_heads, -1, self.head_dim]
-        self._set_saved_state(incremental_state, {
-            'prev_key': tf.reshape(k, saved_kv_shape),
-            'prev_value': tf.reshape(v, saved_kv_shape)
-        })
+        # Save key and value tensor to memory if doing inference
+        if not training:
+            saved_kv_shape = [bsz, self.num_heads, -1, self.head_dim]
+            self._set_saved_state(
+                k=tf.reshape(k, saved_kv_shape),
+                v=tf.reshape(v, saved_kv_shape)
+            )
 
         src_len = tf.shape(k)[1]
 
@@ -396,9 +392,9 @@ class CachedMultiheadAttention(tf.keras.layers.Layer):
             attn_output_weights = tf.reshape(
                 attn_output_weights, [bsz, self.num_heads, tgt_len, src_len])
             attn_output_weights = tf.reduce_mean(attn_output_weights, axis=1)
-            return attn_output, incremental_state, attn_output_weights
+            return attn_output, attn_output_weights
         else:
-            return attn_output, incremental_state
+            return attn_output
 
 
 class IncrementalMultiheadAttention(tf.keras.layers.Layer):
@@ -411,7 +407,6 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
         - value_input (src_len, bsz, hidden_dim)
         - attn_mask (tgt_len, src_len) : 1 at positions to mask, 0 at others
         - key_padding_mask (bsz, src_len) : 1 at positions to mask, 0 at others
-        - incremental_state (dict)
         - new_state_order (bsz)
     outputs
         - attn_output (tgt_len, bsz, hidden_dim)
@@ -437,6 +432,9 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
         assert self.head_dim * self.num_heads == self.hidden_dim, \
             'hidden_dim must be divisible by num_heads'
 
+        self._cached_key = None
+        self._cached_value = None
+
     def build(self, input_shapes):
         query_input_shape = input_shapes[0]
         input_dim = int(query_input_shape[2])
@@ -444,19 +442,19 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
         # Input and output linear layer weights
         self.in_q_proj_weight = self.add_weight(
             name='in_q_proj_weight',
-            shape=[input_dim, self.hidden_dim],
+            shape=[self.hidden_dim, input_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
         self.in_k_proj_weight = self.add_weight(
             name='in_k_proj_weight',
-            shape=[input_dim, self.hidden_dim],
+            shape=[self.hidden_dim, input_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
         self.in_v_proj_weight = self.add_weight(
             name='in_v_proj_weight',
-            shape=[input_dim, self.hidden_dim],
+            shape=[self.hidden_dim, input_dim],
             dtype=self.dtype,
             initializer=tf.keras.initializers.GlorotUniform()
         )
@@ -509,33 +507,33 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
 
         super(IncrementalMultiheadAttention, self).build(input_shapes)
 
-    def _get_saved_state(self, incremental_state):
-        return incr_decoding_utils.get_state(
-            module_instance=self,
-            incremental_state=incremental_state,
-            key_postfix=self._key_postfix
-        ) or {}
+    def _get_saved_state(self):
+        return self._cached_key, self._cached_value
 
-    def _set_saved_state(self, incremental_state, value):
-        incr_decoding_utils.set_state(
-            module_instance=self,
-            incremental_state=incremental_state,
-            key_postfix=self._key_postfix,
-            value=value
-        )
+    def _set_saved_state(self, k, v):
+        self._cached_key = k
+        self._cached_value = v
+
+    def clear_cached_states(self):
+        self._cached_key = None
+        self._cached_value = None
 
     def call(self, inputs, training=None, need_weights=None):
         (
-            query_input, key_input, value_input, attn_mask,
-            incremental_state, new_state_order
+            query_input, key_input, value_input,
+            attn_mask, new_state_order
         ) = inputs
 
         query_input_shape = tf.shape(query_input)
         tgt_len = query_input_shape[0]
         bsz = query_input_shape[1]
 
-        # Get previous state
-        saved_state = self._get_saved_state(incremental_state)
+        # Get previous state and reduce key_input and value input
+        prev_key, prev_value = self._get_saved_state()
+        if prev_key is not None:
+            prev_size = tf.shape(prev_key)[2]
+            key_input = key_input[prev_size:]
+            value_input = value_input[prev_size:]
 
         # Compute query, key and value tensor
         q = tf.matmul(query_input, self.in_q_proj_weight, transpose_b=True)
@@ -556,10 +554,7 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
         v = tf.transpose(v, [1, 0, 2])
 
         # Make use of saved state
-        if 'prev_key' in saved_state:
-            prev_key = saved_state['prev_key']
-            prev_value = saved_state['prev_value']
-
+        if prev_key is not None:
             prev_key = tf.gather(prev_key, new_state_order)
             prev_value = tf.gather(prev_value, new_state_order)
 
@@ -570,11 +565,13 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
             k = tf.concat([prev_key, k], axis=1)
             v = tf.concat([prev_value, v], axis=1)
 
-        saved_kv_shape = [bsz, self.num_heads, -1, self.head_dim]
-        self._set_saved_state(incremental_state, {
-            'prev_key': tf.reshape(k, saved_kv_shape),
-            'prev_value': tf.reshape(v, saved_kv_shape)
-        })
+        # Save key and value tensor to memory if doing inference
+        if not training:
+            saved_kv_shape = [bsz, self.num_heads, -1, self.head_dim]
+            self._set_saved_state(
+                k=tf.reshape(k, saved_kv_shape),
+                v=tf.reshape(v, saved_kv_shape)
+            )
 
         src_len = tf.shape(k)[1]
 
@@ -611,6 +608,6 @@ class IncrementalMultiheadAttention(tf.keras.layers.Layer):
             attn_output_weights = tf.reshape(
                 attn_output_weights, [bsz, self.num_heads, tgt_len, src_len])
             attn_output_weights = tf.reduce_mean(attn_output_weights, axis=1)
-            return attn_output, incremental_state, attn_output_weights
+            return attn_output, attn_output_weights
         else:
-            return attn_output, incremental_state
+            return attn_output
