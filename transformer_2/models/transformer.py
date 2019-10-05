@@ -16,21 +16,18 @@ class Transformer(tf.keras.Model):
         self.config = config
 
     def call(self, inputs, training=None):
-        (
-            src_tokens, src_lengths, prev_output_tokens,
-            incremental_state, new_state_order
-        ) = inputs
+        src_tokens, src_lengths, prev_output_tokens, new_state_order = inputs
 
         encoder_out, encoder_padding_mask = self.encoder((
             src_tokens, src_lengths
         ))
-        decoder_out, incremental_state = self.decoder((
+        decoder_out = self.decoder((
             prev_output_tokens,
             encoder_out, encoder_padding_mask,
-            incremental_state, new_state_order
+            new_state_order
         ))
 
-        return decoder_out, incremental_state
+        return decoder_out
 
     @classmethod
     def make_model(

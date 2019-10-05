@@ -59,16 +59,15 @@ class TransformerDecoderLayer(tf.keras.Model):
         (
             x, attn_mask,
             encoder_out, encoder_padding_mask,
-            incremental_state, new_state_order
+            new_state_order
         ) = inputs
 
         # Apply self attention
         residual = x
         x = self.self_attn_layer_norm(x) if self.normalize_before else x
 
-        x, incremental_state = self.self_attn_layer((
-            x, x, x, attn_mask,
-            incremental_state, new_state_order
+        x = self.self_attn_layer((
+            x, x, x, attn_mask, new_state_order
         ), training=training)
 
         x = tf.nn.dropout(x, rate=self.dropout) if training else x
@@ -79,9 +78,8 @@ class TransformerDecoderLayer(tf.keras.Model):
         residual = x
         x = self.encoder_attn_layer_norm(x) if self.normalize_before else x
 
-        x, incremental_state = self.encoder_attn_layer((
-            x, encoder_out, encoder_out, encoder_padding_mask,
-            incremental_state, new_state_order
+        x = self.encoder_attn_layer((
+            x, encoder_out, encoder_out, encoder_padding_mask, new_state_order
         ), training=training)
 
         x = tf.nn.dropout(x, rate=self.dropout) if training else x
@@ -98,7 +96,11 @@ class TransformerDecoderLayer(tf.keras.Model):
         x += residual
         x = x if self.normalize_before else self.layer_norm(x)
 
-        return x, incremental_state
+        return x
+
+    def clear_cached_states(self):
+        self.self_attn_layer.clear_cached_states()
+        self.encoder_attn_layer.clear_cached_states()
 
 
 class TransformerDecoder(tf.keras.Model):
@@ -194,7 +196,7 @@ class TransformerDecoder(tf.keras.Model):
         (
             prev_output_tokens,
             encoder_out, encoder_padding_mask,
-            incremental_state, new_state_order
+            new_state_order
         ) = inputs
 
         src_len = tf.shape(prev_output_tokens)[1]
@@ -214,10 +216,10 @@ class TransformerDecoder(tf.keras.Model):
 
         # Apply decoder layers
         for layer in self.decoder_layers:
-            x, incremental_state = layer((
+            x = layer((
                 x, self.future_mask[:src_len, :src_len],
                 encoder_out, encoder_padding_mask,
-                incremental_state, new_state_order
+                new_state_order
             ), training=training)
 
         if self.normalize_before:
@@ -240,4 +242,8 @@ class TransformerDecoder(tf.keras.Model):
                 transpose_b=True
             )
 
-        return x, incremental_state
+        return x
+
+    def clear_cached_states(self):
+        for layer in self.decoder_layers:
+            layer.clear_cached_states()
