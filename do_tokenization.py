@@ -6,12 +6,13 @@ import logging
 import argparse
 import sentencepiece
 
-from transformer_2_cli.train_config import make_config
-from transformer_2_cli import setup_utils
 from transformer_2.data.processing import make_processor_from_list
 from transformer_2.utils.file_utils import map_file
 from transformer_2.utils.io_utils \
     import read_yaml_from_file, write_yaml_to_file
+
+from transformer_2_cli import setup_utils
+from transformer_2_cli.train_config import make_config
 
 logger = logging.getLogger()
 
@@ -38,13 +39,11 @@ def do_tokenization(config):
         and os.path.isfile(tgt_clean_corpus_path), \
         'Make sure to run do_preprocessing first'
 
-    output_dir = setup_utils.get_output_dir(config)
     for t in ['src', 'tgt']:
         clean_corpus_path = setup_utils.get_data_filepath(config, 'clean', t)
         token_corpus_path = setup_utils.get_data_filepath(config, 'token', t)
-        spm_model_prefix = os.path.join(
-            output_dir, 'spm_model.{}'.format(t))
-        spm_model_path = '{}.model'.format(spm_model_prefix)
+        spm_model_prefix = setup_utils.get_spm_model_prefix(config, t)
+        spm_model_path = setup_utils.get_spm_model_path(config, t)
         spm_configs = config.src_spm_configs \
             if t == 'src' else config.tgt_spm_configs
 
@@ -108,11 +107,27 @@ def do_tokenization(config):
             num_workers=config.num_workers,
             show_pbar=True)
 
+        # Tokenize validation corpus if needed
+        raw_valid_corpus_path = config['{}_valid_path'.format(t)]
+        valid_corpus_path = setup_utils.get_data_filepath(config, 'valid', t)
+        if raw_valid_corpus_path is not None:
+            processing_steps = config['{}_preprocessing_steps'.format(t)] + \
+                processing_steps
+            processor = make_processor_from_list(processing_steps)
+            map_file(
+                fn=processor,
+                in_filepath=raw_valid_corpus_path,
+                out_filepath=valid_corpus_path,
+                mode='w',
+                num_workers=config.num_workers,
+                show_pbar=True
+            )
+
     # Save preprocessing steps to cached config file
     cached_config_path = setup_utils.get_cached_config_path(config)
     cached_config = read_yaml_from_file(cached_config_path)
-    cached_config['src_spm_configs'] = config.src_spm_configs
-    cached_config['tgt_spm_configs'] = config.tgt_spm_configs
+    cached_config['src_spm_configs'] = config.src_spm_configs.to_dict()
+    cached_config['tgt_spm_configs'] = config.tgt_spm_configs.to_dict()
     write_yaml_to_file(cached_config, cached_config_path)
 
 
