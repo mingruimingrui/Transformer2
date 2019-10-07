@@ -8,7 +8,11 @@ from transformer_2.utils.config_system import ConfigSystem
 __all__ = ['make_config']
 
 
-_C = ConfigSystem()
+def validate_config_fn(config):
+    return
+
+
+_C = ConfigSystem(validate_config_fn=validate_config_fn)
 # --------------------------------------------------------------------------- #
 # Start of general configs
 # --------------------------------------------------------------------------- #
@@ -104,8 +108,8 @@ _C.tgt_spm_configs = deepcopy(_C.src_spm_configs)
 # This variable cannot be changed at this point of time
 _C.model_type = 'Transformer'
 
-# `model_config` is the model config for the transformer model
-_C.model_config = ConfigSystem()
+# `model_configs` is the model config for the transformer model
+_C.model_configs = ConfigSystem()
 
 
 # --------------------------------------------------------------------------- #
@@ -159,10 +163,9 @@ _C.train_configs.lr_scheduler = 'fixed'
 # The minimum learning rate as a result lr scheduler.
 _C.train_configs.min_lr = 1e-9
 
-# `adam_betas` (type: string) (default: '(0.9,0.98)')
-# The adam beta1 and beta2. The input to this argument must be a string
-# representation of a pair of float.
-_C.train_configs.adam_betas = '(0.9,0.98)'
+# `adam_betas` (type: Tuple[float, float]) (default: '[0.9, 0.98]')
+# The adam beta1 and beta2.
+_C.train_configs.adam_betas = [0.9, 0.98]
 
 # `clipnorm` (type: float) (default: None)
 # Should gradient be clipped by norm of each tensor?

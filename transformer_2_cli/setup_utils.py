@@ -42,6 +42,14 @@ def get_data_dir(config):
     return os.path.join(config.train_dir, 'data')
 
 
+def get_data_bin_dir(config):
+    return os.path.join(get_data_dir(config), 'bin')
+
+
+def get_data_valid_bin_dir(config):
+    return os.path.join(get_data_dir(config), 'valid_bin')
+
+
 def get_data_filepath(config, prefix, postfix=None):
     filepath = os.path.join(get_data_dir(config), prefix)
     if postfix is not None:
