@@ -36,6 +36,8 @@ class Transformer(tf.keras.Model):
         name='transformer', **kwargs
     ):
         assert config_file is not None or config_dict is not None
+        if config_dict is None:
+            config_dict = {}
         config = make_config(config_file=config_file, **config_dict)
 
         # Make encoder embeddings
