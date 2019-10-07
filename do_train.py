@@ -175,6 +175,8 @@ def do_train(config):
     model, optimizer = load_model_and_optimizer(dataset, train_dtype, config)
 
     # Define step and update functions
+    log_dir = setup_utils.get_log_dir(config)
+    writer = tf.summary.create_file_writer(log_dir)
     tgt_pad_idx = dataset.tgt_spm_model.pad_id()
     dummy_new_state_order = tf.constant([], dtype=train_dtype)
 
@@ -229,7 +231,8 @@ def do_train(config):
             total_bsz
         )
 
-    def compute_valid_loss():
+    def do_validation(update_nb):
+        sys.stdout.write('\r')
         logger.info('Doing validation')
         start_time = time()
         valid_dataset_iter = make_dataset_iterator(valid_dataset, config)
@@ -243,18 +246,21 @@ def do_train(config):
                 total_loss += loss.numpy() * bsz
                 total_nll_loss += nll_loss.numpy() * bsz
                 total_bsz += bsz
-            # except tf.errors.OutOfRangeError:
             except StopIteration:
                 break
+
         finish_time = time()
         time_taken = finish_time - start_time
         print('Validation completed in {:.1f}s'.format(time_taken))
-        return total_loss / total_bsz, total_nll_loss / total_bsz
+
+        log_metrics(i, {
+            'valid_loss': total_loss / total_bsz,
+            'valid_nll_loss': nll_loss / total_bsz
+        }, log_with_logger=True)
+        writer.flush()
 
     # Training starts
     logger.info('Ready to begin training')
-    log_dir = setup_utils.get_log_dir(config)
-    writer = tf.summary.create_file_writer(log_dir)
     with writer.as_default():
         # First trace
         loss, nll_loss, bsz = make_one_update()
@@ -265,11 +271,7 @@ def do_train(config):
             'nll_loss': nll_loss
         }, log_with_logger=True)
 
-        loss, nll_loss = compute_valid_loss()
-        log_metrics(0, {
-            'valid_loss': loss,
-            'valid_nll_loss': nll_loss
-        }, log_with_logger=True)
+        do_validation(0)
 
         # Do training loop
         total_num_updates = config.train_configs.num_steps // \
@@ -286,36 +288,27 @@ def do_train(config):
             loss, nll_loss, bsz = make_one_update()
 
             # Do logging
-            cur_time = time()
-            log_with_logger = False
-            if cur_time >= prev_log_time + config.log_configs.log_interval:
-                log_with_logger = True
-                prev_log_time = cur_time
-            log_metrics(i, {
+            metrics = {
                 'bsz': bsz,
                 'loss': loss,
                 'nll_loss': nll_loss
-            }, log_with_logger=log_with_logger)
+            }
+            cur_time = time()
+            if cur_time >= prev_log_time + config.log_configs.log_interval:
+                log_metrics(i, metrics, True)
+                prev_log_time = cur_time
+            else:
+                log_metrics(i, metrics, False)
             writer.flush()
 
             # Save model
             if cur_time >= prev_save_time + 3600:
                 save_model(model, i, config)
-                loss, nll_loss, _ = compute_valid_loss()
-                log_metrics(i, {
-                    'valid_loss': loss,
-                    'valid_nll_loss': nll_loss
-                }, log_with_logger=True)
-                writer.flush()
+                do_validation(i)
                 prev_save_time = cur_time
 
         save_model(model, 'final', config)
-        loss, nll_loss = compute_valid_loss()
-        log_metrics('final', {
-            'valid_loss': loss,
-            'valid_nll_loss': nll_loss
-        }, log_with_logger=True)
-        writer.flush()
+        do_validation('final')
 
     finish_time = time()
     time_taken = finish_time - start_time
