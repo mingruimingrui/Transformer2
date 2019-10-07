@@ -89,15 +89,16 @@ def make_dataset_iterator(dataset, config, generate_infinitely=False):
 
 
 def load_model_and_optimizer(dataset, train_dtype, config):
-    model = Transformer.make_model(config_dict={
-        'encoder_vocab_size': config.src_spm_configs.vocab_size,
-        'encoder_padding_idx': dataset.src_spm_model.pad_id(),
-        'decoder_vocab_size': config.tgt_spm_configs.vocab_size,
-        'decoder_padding_idx': dataset.tgt_spm_model.pad_id(),
-        'dropout': config.train_configs.dropout,
-        'attn_dropout': config.train_configs.attn_dropout,
-        'activation_dropout': config.train_configs.activation_dropout
-    }, dtype=train_dtype)
+    model_config = config.model_configs.to_dict()
+    model_config['encoder_vocab_size'] = config.src_spm_configs.vocab_size
+    model_config['encoder_padding_idx'] = dataset.src_spm_model.pad_id()
+    model_config['decoder_vocab_size'] = config.tgt_spm_configs.vocab_size
+    model_config['decoder_padding_idx'] = dataset.tgt_spm_model.pad_id()
+    model_config['dropout'] = config.train_configs.dropout
+    model_config['attn_dropout'] = config.train_configs.attn_dropout
+    model_config['activation_dropout'] = \
+        config.train_configs.activation_dropout
+    model = Transformer.make_model(config_dict=model_config, dtype=train_dtype)
 
     optimizer = tf.keras.optimizers.Adam(
         learning_rate=config.train_configs.warmup_init_lr,
