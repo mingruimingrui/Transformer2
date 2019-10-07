@@ -209,7 +209,7 @@ def do_train(config):
         return loss, nll_loss, bsz
 
     @tf.function
-    def make_one_update():
+    def do_one_update():
         # Init placeholders for training metrics
         total_loss = tf.constant(0, dtype=train_dtype)
         total_nll_loss = tf.constant(0, dtype=train_dtype)
@@ -253,7 +253,7 @@ def do_train(config):
         time_taken = finish_time - start_time
         print('Validation completed in {:.1f}s'.format(time_taken))
 
-        log_metrics(i, {
+        log_metrics(update_nb, {
             'valid_loss': total_loss / total_bsz,
             'valid_nll_loss': nll_loss / total_bsz
         }, log_with_logger=True)
@@ -263,13 +263,13 @@ def do_train(config):
     logger.info('Ready to begin training')
     with writer.as_default():
         # First trace
-        loss, nll_loss, bsz = make_one_update()
+        loss, nll_loss, bsz = do_one_update()
         save_model(model, 0, config=config, save_model_config=True)
-        log_metrics(0, {
-            'bsz': bsz,
-            'loss': loss,
-            'nll_loss': nll_loss
-        }, log_with_logger=True)
+        log_metrics(
+            update_nb=0,
+            obj={'bsz': bsz, 'loss': loss, 'nll_loss': nll_loss},
+            log_with_logger=True
+        )
 
         do_validation(0)
 
@@ -285,14 +285,10 @@ def do_train(config):
             optimizer.learning_rate = compute_learning_rate(i, config)
 
             # Do backprop
-            loss, nll_loss, bsz = make_one_update()
+            loss, nll_loss, bsz = do_one_update()
 
             # Do logging
-            metrics = {
-                'bsz': bsz,
-                'loss': loss,
-                'nll_loss': nll_loss
-            }
+            metrics = {'bsz': bsz, 'loss': loss, 'nll_loss': nll_loss}
             cur_time = time()
             if cur_time >= prev_log_time + config.log_configs.log_interval:
                 log_metrics(i, metrics, True)
