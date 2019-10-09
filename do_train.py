@@ -75,7 +75,7 @@ def load_datasets(config):
     return dataset, valid_dataset
 
 
-def make_dataset_iterator(dataset, config, generate_infinitely=False):
+def make_tf_dataset_iterator(dataset, config, generate_infinitely=True):
     tf_dataset = dataset.make_tf_dataset(
         max_batch_tokens=config.train_configs.max_batch_tokens,
         max_batch_sentences=config.train_configs.max_batch_sentences,
@@ -83,9 +83,21 @@ def make_dataset_iterator(dataset, config, generate_infinitely=False):
         buffer_size=1000000,
         do_optimal_batching=True,
         generate_infinitely=generate_infinitely,
-        warn_on_skip=True
+        warn_on_skip=False
     ).prefetch(10)
     return iter(tf_dataset)
+
+
+def make_dataset_generator(dataset, config, generate_infinitely=False):
+    return dataset.make_batch_generator(
+        max_batch_tokens=config.train_configs.max_batch_tokens,
+        max_batch_sentences=config.train_configs.max_batch_sentences,
+        shuffle=True,
+        buffer_size=1000000,
+        do_optimal_batching=True,
+        generate_infinitely=generate_infinitely,
+        warn_on_skip=False
+    )
 
 
 def load_model_and_optimizer(dataset, train_dtype, config):
@@ -167,7 +179,7 @@ def do_train(config):
     # Load dataset iterators
     logger.info('Loading dataset')
     dataset, valid_dataset = load_datasets(config)
-    dataset_iter = make_dataset_iterator(dataset, config, True)
+    dataset_iter = make_tf_dataset_iterator(dataset, config, True)
 
     # Load model and optimizer
     logger.info('Making model')
@@ -180,12 +192,14 @@ def do_train(config):
     tgt_pad_idx = dataset.tgt_spm_model.pad_id()
     dummy_new_state_order = tf.constant([], dtype=train_dtype)
 
-    def take_one_step(dataset_iterator, training=True):
-        # Get next batch
-        src_tokens, tgt_tokens, src_lengths, _ = next(dataset_iterator)
-        bsz = tf.cast(tf.shape(src_tokens)[0], dtype=train_dtype)
-
+    @tf.function(input_signature=[
+        tf.TensorSpec(shape=[None, None], dtype=tf.int32),
+        tf.TensorSpec(shape=[None, None], dtype=tf.int32),
+        tf.TensorSpec(shape=[None], dtype=tf.int32)
+    ])
+    def take_one_step(src_tokens, tgt_tokens, src_lengths):
         # Get input and target labels
+        bsz = tf.cast(tf.shape(src_tokens)[0], dtype=train_dtype)
         prev_output_tokens = tgt_tokens[:, :-1]
         labels = tgt_tokens[:, 1:]
 
@@ -195,9 +209,7 @@ def do_train(config):
             src_lengths,
             prev_output_tokens,
             dummy_new_state_order
-        ), training=training)
-        if not training:
-            model.decoder.clear_cached_states()
+        ), training=True)
 
         # Remove padding
         keep_pos = labels != tgt_pad_idx
@@ -217,7 +229,9 @@ def do_train(config):
 
         for i in tf.range(config.train_configs.update_freq):
             with tf.GradientTape() as tape:
-                loss, nll_loss, bsz = take_one_step(dataset_iter)
+                src_tokens, tgt_tokens, src_lengths, _ = next(dataset_iter)
+                loss, nll_loss, bsz = \
+                    take_one_step(src_tokens, tgt_tokens, src_lengths)
             grads = tape.gradient(loss, model.trainable_variables)
             optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
@@ -235,27 +249,28 @@ def do_train(config):
         sys.stdout.write('\r')
         logger.info('Doing validation')
         start_time = time()
-        valid_dataset_iter = make_dataset_iterator(valid_dataset, config)
+        valid_dataset_iter = make_dataset_generator(valid_dataset, config)
         total_loss = 0
         total_nll_loss = 0
         total_bsz = 0
-        while True:
-            try:
-                loss, nll_loss, bsz = take_one_step(valid_dataset_iter, False)
-                bsz = bsz.numpy()
-                total_loss += loss.numpy() * bsz
-                total_nll_loss += nll_loss.numpy() * bsz
-                total_bsz += bsz
-            except StopIteration:
-                break
+        for src_tokens, tgt_tokens, src_lengths, _ in valid_dataset_iter:
+            loss, nll_loss, bsz = take_one_step(
+                src_tokens=tf.constant(src_tokens, dtype=tf.int32),
+                tgt_tokens=tf.constant(tgt_tokens, dtype=tf.int32),
+                src_lengths=tf.constant(src_lengths, dtype=tf.int32)
+            )
+            bsz = bsz.numpy()
+            total_loss += loss.numpy() * bsz
+            total_nll_loss += nll_loss.numpy() * bsz
+            total_bsz += bsz
 
         finish_time = time()
         time_taken = finish_time - start_time
-        print('Validation completed in {:.1f}s'.format(time_taken))
+        logger.info('Validation completed in {:.1f}s'.format(time_taken))
 
         log_metrics(update_nb, {
             'valid_loss': total_loss / total_bsz,
-            'valid_nll_loss': nll_loss / total_bsz
+            'valid_nll_loss': total_nll_loss / total_bsz
         }, log_with_logger=True)
         writer.flush()
 
@@ -264,13 +279,12 @@ def do_train(config):
     with writer.as_default():
         # First trace
         loss, nll_loss, bsz = do_one_update()
-        save_model(model, 0, config=config, save_model_config=True)
-        log_metrics(
-            update_nb=0,
-            obj={'bsz': bsz, 'loss': loss, 'nll_loss': nll_loss},
-            log_with_logger=True
-        )
 
+        # Log first trace results
+        model.summary()
+        save_model(model, 0, config=config, save_model_config=True)
+        metrics = {'bsz': bsz, 'loss': loss, 'nll_loss': nll_loss}
+        log_metrics(0, metrics, True)
         do_validation(0)
 
         # Do training loop
