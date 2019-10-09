@@ -118,6 +118,10 @@ class TransformerEncoder(tf.keras.Model):
             )
             # Initialize layer here to generate positional embedding weights
             self.position_embeddings(tf.constant([[0]]))
+
+        self.project_in_dim = None if hidden_dim == embed_dim else \
+            tf.keras.layers.Dense(hidden_dim, use_bias=False)
+
         self.encoder_layers = []
         for i in range(num_layers):
             self.encoder_layers.append(TransformerEncoderLayer(
@@ -141,6 +145,10 @@ class TransformerEncoder(tf.keras.Model):
         if not self.no_pos_embeds:
             x += self.position_embeddings.embeddings[:tf.shape(x)[1]]
         x = tf.nn.dropout(x, self.dropout) if training else x
+
+        # Re-rank to hidden dim size
+        if self.project_in_dim is not None:
+            x = self.project_in_dim(x)
 
         # B x T x C -> T x B x C
         x = tf.transpose(x, [1, 0, 2])

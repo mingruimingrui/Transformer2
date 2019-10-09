@@ -175,8 +175,12 @@ class TransformerDecoder(tf.keras.Model):
             )
             # Initialize layer here to generate positional embedding weights
             self.position_embeddings(tf.constant([[0]]))
+
+        self.project_in_dim = None if hidden_dim == input_dim else \
+            tf.keras.layers.Dense(hidden_dim, use_bias=False)
         self.project_out_dim = None if hidden_dim == output_dim else \
             tf.keras.layers.Dense(output_dim, use_bias=False)
+
         self.decoder_layers = []
         for i in range(num_layers):
             self.decoder_layers.append(TransformerDecoderLayer(
@@ -211,6 +215,10 @@ class TransformerDecoder(tf.keras.Model):
             x += self.position_embeddings.embeddings[:src_len]
         x = tf.nn.dropout(x, self.dropout) if training else x
 
+        # Re-rank to hidden dim size
+        if self.project_in_dim is not None:
+            x = self.project_in_dim(x)
+
         # B x T x C -> T x B x C
         x = tf.transpose(x, [1, 0, 2])
 
@@ -228,6 +236,7 @@ class TransformerDecoder(tf.keras.Model):
         # T x B x C -> B x T x C
         x = tf.transpose(x, [1, 0, 2])
 
+        # Re-rank to output dim size
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
 
