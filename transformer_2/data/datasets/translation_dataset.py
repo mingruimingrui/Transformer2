@@ -347,77 +347,78 @@ class TranslationDataset(object):
         )
 
         # Create stared objects
-        manager = multiprocessing.Manager()
-        batcher_coord = Coordinator(manager)
-        unwrapper_coord = Coordinator(manager)
-        shared_dict = manager.dict()
-        chunk_queue = manager.Queue(maxsize=1)
-        batch_queue = Queue(maxsize=100)
+        with multiprocessing.Manager() as manager:
+            batcher_coord = Coordinator(manager)
+            unwrapper_coord = Coordinator(manager)
+            shared_dict = manager.dict()
+            chunk_queue = manager.Queue(maxsize=1)
+            batch_queue = Queue(maxsize=100)
 
-        self.batcher_coord = batcher_coord
-        self.unwrapper_coord = unwrapper_coord
+            self.batcher_coord = batcher_coord
+            self.unwrapper_coord = unwrapper_coord
 
-        # Start reader + batcher sub-process
-        batcher_subprocess = multiprocessing.Process(
-            target=_reader_batcher_subprocess_loop,
-            kwargs={
-                'coord': batcher_coord,
-                'shared_dict': shared_dict,
-                'chunk_queue': chunk_queue,
-                'corpus_num_lines': self.corpus_num_lines,
-                'src_corpus_path': self.src_corpus_path,
-                'tgt_corpus_path': self.tgt_corpus_path,
-                'src_spm_model': self.src_spm_model,
-                'tgt_spm_model': self.tgt_spm_model,
-                'max_batch_tokens': max_batch_tokens,
-                'max_batch_sentences': max_batch_sentences,
-                'shuffle': shuffle,
-                'buffer_size': buffer_size,
-                'do_optimal_batching': do_optimal_batching,
-                'generate_infinitely': generate_infinitely,
-                'warn_on_skip': warn_on_skip
-            }
-        )
+            # Start reader + batcher sub-process
+            batcher_subprocess = multiprocessing.Process(
+                target=_reader_batcher_subprocess_loop,
+                kwargs={
+                    'coord': batcher_coord,
+                    'shared_dict': shared_dict,
+                    'chunk_queue': chunk_queue,
+                    'corpus_num_lines': self.corpus_num_lines,
+                    'src_corpus_path': self.src_corpus_path,
+                    'tgt_corpus_path': self.tgt_corpus_path,
+                    'src_spm_model': self.src_spm_model,
+                    'tgt_spm_model': self.tgt_spm_model,
+                    'max_batch_tokens': max_batch_tokens,
+                    'max_batch_sentences': max_batch_sentences,
+                    'shuffle': shuffle,
+                    'buffer_size': buffer_size,
+                    'do_optimal_batching': do_optimal_batching,
+                    'generate_infinitely': generate_infinitely,
+                    'warn_on_skip': warn_on_skip
+                }
+            )
 
-        # Start unwrapper sub-thread
-        unwrapper_subthread = threading.Thread(
-            target=_unwrapper_subthread_loop,
-            kwargs={
-                'coord': unwrapper_coord,
-                'chunk_queue': chunk_queue,
-                'batch_queue': batch_queue
-            }
-        )
+            # Start unwrapper sub-thread
+            unwrapper_subthread = threading.Thread(
+                target=_unwrapper_subthread_loop,
+                kwargs={
+                    'coord': unwrapper_coord,
+                    'chunk_queue': chunk_queue,
+                    'batch_queue': batch_queue
+                }
+            )
 
-        def stop_workers():
-            batcher_coord.request_stop()
-            unwrapper_coord.request_stop()
-            batcher_subprocess.join()
-            unwrapper_subthread.join()
-        atexit.register(stop_workers)
+            def stop_workers():
+                if manager._process.is_alive():
+                    batcher_coord.request_stop()
+                    unwrapper_coord.request_stop()
+                    batcher_subprocess.join()
+                    unwrapper_subthread.join()
+            atexit.register(stop_workers)
 
-        batcher_subprocess.start()
-        unwrapper_subthread.start()
+            batcher_subprocess.start()
+            unwrapper_subthread.start()
 
-        # Consume batches from batch_queue and yield
-        num_batches_yielded = 0
-        while not batcher_coord.should_stop():
-            try:
-                batch = coordinated_get(batcher_coord, batch_queue)
-            except CoordinatorStoppedException:
-                break
-            num_batches_yielded += 1
-            yield batch
+            # Consume batches from batch_queue and yield
+            num_batches_yielded = 0
+            while not batcher_coord.should_stop():
+                try:
+                    batch = coordinated_get(batcher_coord, batch_queue)
+                except CoordinatorStoppedException:
+                    break
+                num_batches_yielded += 1
+                yield batch
 
-        # Yield all remaining batches in queue
-        num_remaining_batches = \
-            shared_dict['num_batches_generated'] - num_batches_yielded
-        for _ in range(num_remaining_batches):
-            batch = coordinated_get(unwrapper_coord, batch_queue)
-            yield batch
+            # Yield all remaining batches in queue
+            num_remaining_batches = \
+                shared_dict['num_batches_generated'] - num_batches_yielded
+            for _ in range(num_remaining_batches):
+                batch = coordinated_get(unwrapper_coord, batch_queue)
+                yield batch
 
-        # Stop all workers
-        stop_workers()
+            # Stop all workers
+            stop_workers()
 
     def make_tf_dataset(
         self,
