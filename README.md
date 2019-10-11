@@ -58,5 +58,4 @@ extreme.
 
 ## Current problems
 
- - Inference speed is slower than [fairseq](https://github.com/pytorch/fairseq)
-(T⌓T).
+ - Inference speed is slower than fairseq (T⌓T).
