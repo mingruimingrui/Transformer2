@@ -4,6 +4,7 @@ Configurables for training
 
 from copy import deepcopy
 from transformer_2.utils.config_system import ConfigSystem
+from transformer_2.models.transformer_config import _C as _model_configs
 
 __all__ = ['make_config']
 
@@ -109,7 +110,7 @@ _C.tgt_spm_configs = deepcopy(_C.src_spm_configs)
 _C.model_type = 'Transformer'
 
 # `model_configs` is the model config for the transformer model
-_C.model_configs = ConfigSystem()
+_C.model_configs = deepcopy(_model_configs)
 
 
 # --------------------------------------------------------------------------- #
