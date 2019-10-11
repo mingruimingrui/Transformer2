@@ -50,8 +50,8 @@ incremental decoding. The remainder of the time are spent on beam search
 operations which theoretically should be much less computationaly expensive.
 
 Note, if you think 25% to 50% is vague, its because the ratio of time spent
-has a huge variance and it is diffiult to give a good value. Will plot a
-distribution curve with box plot soonish in the future.
+has a huge variance and it is diffiult to give a good value. Would likely plot
+a distribution curve with box plot (hopefully some time soon).
 
 This repository aims to address the issue of slow beam search with
 `tf.function` autograph to encapsulate conditional arguments as part of a
