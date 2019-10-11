@@ -1,0 +1,65 @@
+---
+train_dir: None  # (Required) The directory to dump training artifacts and output
+src_corpus_paths: []  # (Required) A list of source language corpus
+tgt_corpus_paths: []  # (Required) A list of target language corpus
+src_valid_path: None
+tgt_valid_path: None
+num_workers: 2
+src_preprocessing_steps: []
+tgt_preprocessing_steps: []
+src_spm_configs:
+  use_existing: None
+  vocab_size: 8000
+  model_type: bpe
+  input_sentence_size: 3000000
+  add_digit_tokens: False
+  user_defined_symbols: []
+train_configs:
+  num_steps: 100000
+  update_freq: 1
+  max_batch_tokens: 1024
+  max_batch_sentences: 1024
+  lr: 0.00001
+  warmup_steps: 16000
+  warmup_init_lr: 0.0000001
+  lr_scheduler: 'fixed'
+  min_lr: 0.000000001
+  clipnorm: None
+  fp16: False
+  dropout: None
+  attn_dropout: None
+  activation_dropout: None
+log_configs:
+  log_interval: 60
+  checkpoint_interval: 7200
+model_configs:
+  activation_dropout: 0.0
+  activation_fn: relu
+  attn_dropout: 0.0
+  decoder_embed_dim: 512
+  decoder_hidden_dim: 512
+  decoder_learned_pos_embeds: False
+  decoder_max_positions: 1024
+  decoder_no_encoder_attn: False
+  decoder_no_pos_embeds: False
+  decoder_num_heads: 4
+  decoder_num_layers: 6
+  decoder_padding_idx: None
+  decoder_transistor_dim: 1024
+  decoder_use_bias: True
+  decoder_vocab_size: None
+  dropout: 0.0
+  encoder_embed_dim: 512
+  encoder_hidden_dim: 512
+  encoder_learned_pos_embeds: False
+  encoder_max_positions: 1024
+  encoder_no_pos_embeds: False
+  encoder_num_heads: 4
+  encoder_num_layers: 6
+  encoder_padding_idx: None
+  encoder_transistor_dim: 1024
+  encoder_use_bias: True
+  encoder_vocab_size: None
+  normalize_before: True
+  share_all_embeddings: False
+  share_decoder_input_output_embed: True
