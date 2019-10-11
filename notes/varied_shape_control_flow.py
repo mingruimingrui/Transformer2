@@ -36,5 +36,5 @@ print('A variable module.x is created.')
 print('Observe that at each run of the loop, it\'s shape changes.')
 foo()
 
-print('Observe that the variable shaped tensor exists only in tf.function')
+print('Observe that the variable shaped tensor exists only in tf.range')
 print(module.x)
