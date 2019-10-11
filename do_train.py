@@ -2,6 +2,7 @@
 
 import os
 import sys
+import shutil
 import logging
 import argparse
 from time import time
@@ -323,6 +324,14 @@ def do_train(config):
     finish_time = time()
     time_taken = finish_time - start_time
     logger.info('Training done in {:.1f}s'.format(time_taken))
+
+    # Copy final checkpoint to output
+    checkpoint_dir = setup_utils.get_checkpoint_dir(config)
+    output_dir = setup_utils.get_output_dir(config)
+    shutil.copy(
+        os.path.join(checkpoint_dir, 'checkpoint_final.h5'),
+        os.path.join(output_dir, 'checkpoint.h5')
+    )
 
 
 def main():
