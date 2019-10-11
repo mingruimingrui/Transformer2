@@ -13,8 +13,8 @@ from transformer_2.utils.batching import batch_tokenized_sents
 from transformer_2.utils.io_utils import read_yaml_from_file
 
 MODEL_DTYPE = tf.float16
-MAX_BATCH_SENTENCES = 1024 * 2
-MAX_BATCH_TOKENS = 30000 * 2
+MAX_BATCH_SENTENCES = 256
+MAX_BATCH_TOKENS = 30000
 BEAM_SIZE = 1
 PRINT_TRANSLATIONS = False
 
