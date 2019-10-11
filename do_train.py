@@ -141,6 +141,7 @@ def compute_learning_rate(update_nb, config):
 
 def save_model(model, update_id, config, save_model_config=False):
     checkpoint_dir = setup_utils.get_checkpoint_dir(config)
+    output_dir = setup_utils.get_output_dir(config)
 
     if save_model_config:
         # Save config
@@ -155,6 +156,10 @@ def save_model(model, update_id, config, save_model_config=False):
     # Save the weights
     weight_savepath = os.path.join(checkpoint_dir, 'checkpoint_{}.h5')
     model.save_weights(weight_savepath.format(update_id))
+
+    # Copy weights to output
+    output_savepath = os.path.join(output_dir, 'checkpoint.h5')
+    shutil.copy(weight_savepath, output_savepath)
 
 
 def log_metrics(update_nb, obj, log_with_logger=False):
@@ -324,14 +329,6 @@ def do_train(config):
     finish_time = time()
     time_taken = finish_time - start_time
     logger.info('Training done in {:.1f}s'.format(time_taken))
-
-    # Copy final checkpoint to output
-    checkpoint_dir = setup_utils.get_checkpoint_dir(config)
-    output_dir = setup_utils.get_output_dir(config)
-    shutil.copy(
-        os.path.join(checkpoint_dir, 'checkpoint_final.h5'),
-        os.path.join(output_dir, 'checkpoint.h5')
-    )
 
 
 def main():
