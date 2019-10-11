@@ -1,13 +1,9 @@
 import tensorflow as tf
 
 
-class MyModule(tf.keras.layers.Layer):
-    def __init__(self, **kwargs):
-        super(MyModule, self).__init__(**kwargs)
+class MyModule(object):
+    def __init__(self):
         self.x = None
-
-    def build(self, input_shapes):
-        super(MyModule, self).build(input_shapes)
 
     def call(self, inputs):
         return inputs
