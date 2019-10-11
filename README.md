@@ -36,18 +36,27 @@ make one heck of a difficult benchmark to beat.
 
 ## Problem to address
 
-While [fairseq](https://github.com/pytorch/fairseq) is capable of performing
-incremental decoding, there still exists the problem of the bottleneck of
-CPU to GPU communication.
+While fairseq is capable of performing incremental decoding, there still exists
+the bottleneck caused by beam search.
 
-At each step of beam search a series of CPU-GPU I/O has to be conducted to
-determine the new beam order, check for completed sentences, and determine
-the right time to stop inference early.
+At each step of beam search a series of operations (some which involves
+CPU to GPU communifcation) has to be conducted to determine the new beam order,
+check for completed sentences, and determine the right time to stop inference
+early.
 
-This repository aims to address the issue of CPU-GPU I/O with `tf.function`
-autograph to encapsulate conditional arguments as part of a graph procedure.
-This would push the capabilities of tensorflow 2.0 autograph feature to the
-extreme.
+Based on tests, it appears that the encoder and decoder forward operations
+accounts for only between 25% to 50% of total inference time for fairseq's
+incremental decoding. The remainder of the time are spent on beam search
+operations which theoretically should be much less computationaly expensive.
+
+Note, if you think 25% to 50% is vague, its because the ratio of time spent
+has a huge variance and it is diffiult to give a good value. Will plot a
+distribution curve with box plot soonish in the future.
+
+This repository aims to address the issue of slow beam search with
+`tf.function` autograph to encapsulate conditional arguments as part of a
+graph procedure. This would push the capabilities of tensorflow 2.0 autograph
+feature to the extreme.
 
 ## Current progress
 
