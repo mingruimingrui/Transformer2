@@ -58,4 +58,4 @@ extreme.
 
 ## Current problems
 
- - Inference speed is slower than fairseq (T⌓T).
+ - Inference speed is slower than fairseq ლ(ಠ_ಠლ).
