@@ -155,7 +155,8 @@ def save_model(model, update_id, config, save_model_config=False):
 
     # Save the weights
     weight_savepath = os.path.join(checkpoint_dir, 'checkpoint_{}.h5')
-    model.save_weights(weight_savepath.format(update_id))
+    weight_savepath = weight_savepath.format(update_id)
+    model.save_weights(weight_savepath)
 
     # Copy weights to output
     output_savepath = os.path.join(output_dir, 'checkpoint.h5')
