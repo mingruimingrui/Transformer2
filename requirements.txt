@@ -1,3 +1,4 @@
+tensorflow-gpu==2.0.0
+sentencepiece==0.1.83
 tqdm
 pyyaml
-tensorflow

@@ -1,5 +1,4 @@
 pyonmttok
-sentencepiece
 sacremoses
 sacrebleu
 unidecode
