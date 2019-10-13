@@ -22,14 +22,31 @@ if BEAM_SIZE != 1:
     raise ValueError('Currently beam_size must be 1')
 warnings.warn('Currently beam search is not working properly.')
 
+# Set memory growth on GPU
+for d in tf.config.experimental.list_physical_devices('GPU'):
+    tf.config.experimental.set_memory_growth(d, True)
 
-# Load train configs from file
-train_config = read_yaml_from_file('debug/output/config.yaml')
+
+# Load model with weights
+print('Loading model')
+model = Transformer.make_model(
+    'debug/output/model_config.yaml',
+    dtype=MODEL_DTYPE
+)
+model((
+    tf.constant([[0]], dtype=tf.int32),  # src_tokens
+    tf.constant([1], dtype=tf.int32),  # src_lengths
+    tf.constant([[0]], dtype=tf.int32),  # prev_output_tokens
+    tf.constant([0], dtype=tf.int32),  # new_state_order
+))
+model.load_weights('debug/output/checkpoint.h5')
 
 
 # Make processor and load spm models
 print('Loading processors')
-processor = make_processor_from_list(train_config['src_preprocessing_steps'])
+src_preprocessing_steps = \
+    read_yaml_from_file('debug/output/src_preprocessing_steps.yaml')
+processor = make_processor_from_list(src_preprocessing_steps)
 src_spm_model = sentencepiece.SentencePieceProcessor()
 src_spm_model.Load('debug/output/spm_model.src.model')
 tgt_spm_model = sentencepiece.SentencePieceProcessor()
@@ -38,7 +55,7 @@ tgt_spm_model.Load('debug/output/spm_model.tgt.model')
 
 # Load sentences to translate
 print('Loading sentences')
-with io.open('debug/newstest2017-ende.en', 'r', encoding='utf-8') as f:
+with io.open('debug/newstest2019-ende.en', 'r', encoding='utf-8') as f:
     src_sents = [processor(l.strip()) for l in f][:10000]
 tokenized_src_sents = []
 for sent in tqdm(src_sents, desc='Tokenizing sentences'):
@@ -54,7 +71,7 @@ print('Batching')
 _, batches, _, _ = batch_tokenized_sents(
     tokenized_sents=tokenized_src_sents,
     padding_idx=src_spm_model.pad_id(),
-    max_positions=train_config['model_configs']['encoder_max_positions'],
+    max_positions=model.config['encoder_max_positions'],
     max_batch_tokens=MAX_BATCH_TOKENS,
     max_batch_sentences=MAX_BATCH_SENTENCES,
     do_optimal_batching=True
@@ -76,23 +93,8 @@ dataset = tf.data.Dataset.from_generator(
 dataset_iterator = iter(dataset)
 
 
-# Load model with weights
-print('Loading model')
-model = Transformer.make_model(
-    config_dict=train_config['model_configs'],
-    dtype=MODEL_DTYPE
-)
-model((
-    tf.constant([[0]], dtype=tf.int32),  # src_tokens
-    tf.constant([1], dtype=tf.int32),  # src_lengths
-    tf.constant([[0]], dtype=tf.int32),  # prev_output_tokens
-    tf.constant([0], dtype=tf.int32),  # new_state_order
-))
-model.load_weights('debug/output/checkpoint.h5')
-
-
 # Make placeholder init values
-decoder_max_positions = train_config['model_configs']['decoder_max_positions']
+decoder_max_positions = model.config['decoder_max_positions']
 _pred_tokens_init_value = np.zeros(
     [MAX_BATCH_SENTENCES * BEAM_SIZE, decoder_max_positions],
     dtype=np.int32
