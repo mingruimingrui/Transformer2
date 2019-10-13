@@ -18,7 +18,11 @@ from transformer_2.data.processing.sacremoses import SacremosesTokenize, \
     SacremosesDetokenize
 
 # Language specific processors
-from .chinese import ToSimplifiedChinese, ToTraditionalChinese, Jieba
+from transformer_2.data.processing.chinese import ToSimplifiedChinese, \
+    ToTraditionalChinese, Jieba
+
+# Default processing steps
+from transformer_2.data.processing._default import DEFAULT_PROCESSING_STEPS
 
 __all__ = [
     'PROCESSOR_REGISTRY', 'BaseProcessor', 'register_processor',
@@ -33,5 +37,7 @@ __all__ = [
     'SacremosesTokenize', 'SacremosesDetokenize',
     'SpmEncode', 'SpmDecode',
 
-    'ToSimplifiedChinese', 'ToTraditionalChinese', 'Jieba'
+    'ToSimplifiedChinese', 'ToTraditionalChinese', 'Jieba',
+
+    'DEFAULT_PROCESSING_STEPS'
 ]
