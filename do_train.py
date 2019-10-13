@@ -113,10 +113,14 @@ def load_model_and_optimizer(dataset, train_dtype, config):
         config.train_configs.activation_dropout
     model = Transformer.make_model(config_dict=model_config, dtype=train_dtype)
 
+    optimizer_kwargs = {}
+    if config.train_configs.clipnorm is not None:
+        optimizer_kwargs['clipnorm'] = config.train_configs.clipnorm
     optimizer = tf.keras.optimizers.Adam(
         learning_rate=config.train_configs.warmup_init_lr,
         beta_1=config.train_configs.adam_betas[0],
-        beta_2=config.train_configs.adam_betas[1]
+        beta_2=config.train_configs.adam_betas[1],
+        **optimizer_kwargs
     )
 
     return model, optimizer
