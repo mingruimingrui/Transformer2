@@ -22,6 +22,10 @@ from transformer_2_cli.train_config import make_config
 
 logger = logging.getLogger()
 
+# Set memory growth on GPU
+for d in tf.config.experimental.list_physical_devices('GPU'):
+    tf.config.experimental.set_memory_growth(d, True)
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
