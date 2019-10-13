@@ -1,7 +1,6 @@
 import os
 import logging
 from six import string_types
-from transformer_2.utils.io_utils import write_yaml_to_file
 
 logger = logging.getLogger()
 
@@ -12,7 +11,8 @@ __all__ = [
     'get_checkpoint_dir',
     'get_output_dir',
     'get_spm_model_prefix',
-    'get_cached_config_path',
+    'get_output_processing_steps_file',
+    'get_output_model_config_file',
     'setup_logging',
     'do_setup'
 ]
@@ -66,8 +66,8 @@ def get_output_dir(config):
 
 
 def get_spm_model_prefix(config, src_or_tgt='src'):
-    output_dir = get_output_dir(config)
-    return os.path.join(output_dir, 'spm_model.{}').format(src_or_tgt)
+    base_prefix = 'spm_model.{}'.format(src_or_tgt)
+    return os.path.join(get_output_dir(config), base_prefix)
 
 
 def get_spm_model_path(config, src_or_tgt='src'):
@@ -75,8 +75,13 @@ def get_spm_model_path(config, src_or_tgt='src'):
     return '{}.model'.format(prefix)
 
 
-def get_cached_config_path(config):
-    return os.path.join(get_output_dir(config), 'config.yaml')
+def get_output_processing_steps_file(config, src_or_tgt='src'):
+    filename = '{}_preprocessing_steps.yaml'.format(src_or_tgt)
+    return os.path.join(get_output_dir(config), filename)
+
+
+def get_output_model_config_file(config):
+    return os.path.join(get_output_dir(config), 'model_config.yaml')
 
 
 # --------------------------------------------------------------------------- #
@@ -148,10 +153,10 @@ def do_setup(config, logger_or_name=None, logfile_prefix='train'):
     # if not os.path.isfile(progress_dict_filepath):
     #     write_json_to_file({}, progress_dict_filepath)
 
-    # Setup empty cached config
-    cached_config_filepath = get_cached_config_path(config)
-    if not os.path.isfile(cached_config_filepath):
-        write_yaml_to_file({}, cached_config_filepath)
+    # # Setup empty cached config
+    # cached_config_filepath = get_cached_config_path(config)
+    # if not os.path.isfile(cached_config_filepath):
+    #     write_yaml_to_file({}, cached_config_filepath)
 
     # Setup logger
     setup_logging(
