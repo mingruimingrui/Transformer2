@@ -5,6 +5,7 @@ import sys
 import shutil
 import logging
 import argparse
+import warnings
 from time import time
 from tqdm import tqdm
 
@@ -193,6 +194,12 @@ def do_train(config):
     # Load model and optimizer
     logger.info('Making model')
     train_dtype = tf.float16 if config.train_configs.fp16 else tf.float32
+    if config.train_configs.fp16:
+        warnings.warn(
+            'Mixed precision training is not yet supported on tf2.0. '
+            'Switching back to single precision training.'
+        )
+        train_dtype = tf.float32
     model, optimizer = load_model_and_optimizer(dataset, train_dtype, config)
 
     # Define some shared objects and training constants
@@ -271,6 +278,12 @@ def do_train(config):
         # Update learning rate
         optimizer.learning_rate = compute_learning_rate(update_nb, config)
 
+        if config.train_configs.update_freq > 1:
+            warnings.warn(
+                'Update freq > 1 currently not working, waiting for tf2.0 '
+                'update to allow for proper gradient accumulation.'
+            )
+
         # Do backprop
         loss, nll_loss, bsz = _do_update()
 
@@ -293,7 +306,10 @@ def do_train(config):
             shared_obj['prev_save_time'] = cur_time
 
     def do_validation(update_nb):
-        """ BUG: validation causes high memory usage """
+        warnings.warn(
+            'Validation currently not done due to already high training GPU '
+            'memory requirements. TODO: Find root cause of issue.'
+        )
         return
 
         sys.stdout.write('\r')
