@@ -2,7 +2,10 @@
 Configurables for training
 """
 
+import os
 from copy import deepcopy
+from six import string_types, integer_types
+
 from transformer_2.utils.config_system import ConfigSystem
 from transformer_2.models.transformer_config import _C as _model_configs
 
@@ -10,7 +13,103 @@ __all__ = ['make_config']
 
 
 def validate_config_fn(config):
-    return
+    def check_type(obj_name, obj, expected_type):
+        """ Check if obj is of expected type """
+        assert isinstance(obj, expected_type), (
+            'Expecting {} to be {} type, instead got {}'
+        ).format(obj_name, expected_type, type(obj))
+
+    def check_file_exists(filepath):
+        assert os.path.isfile(filepath), \
+            'Unable to find {}'.format(os.path.abspath(filepath))
+
+    # General configs
+    assert config.train_dir is not None, \
+        'train_dir must be provided'
+    check_type('train_dir', config.train_dir, string_types)
+    check_type('num_workers', config.num_workers, integer_types)
+    assert len(config.src_corpus_paths) > 0, \
+        'Atleast 1 training corpus has to be provided'
+    assert len(config.src_corpus_paths) == len(config.tgt_corpus_paths), \
+        'Mismatched number of src and tgt training corpus'
+    for filepath in config.src_corpus_paths:
+        check_file_exists(filepath)
+    for filepath in config.tgt_corpus_paths:
+        check_file_exists(filepath)
+
+    if config.src_valid_path is not None:
+        assert config.tgt_valid_path is not None, (
+            'If src_valid_path is provided, '
+            'then tgt_valid_path must also be provided'
+        )
+        check_file_exists(config.src_valid_path)
+        check_file_exists(config.tgt_valid_path)
+
+    # Preprocessing configs
+    if isinstance(config.src_preprocessing_steps, string_types):
+        src_lang = config.src_preprocessing_steps
+        from transformer_2.data.processing import DEFAULT_PROCESSING_STEPS
+        assert src_lang in DEFAULT_PROCESSING_STEPS, \
+            '{} does not have default processing steps'.format(src_lang)
+        config.src_preprocessing_steps = DEFAULT_PROCESSING_STEPS[src_lang]
+        print('Using default processing steps for {}'.format(src_lang))
+        print(config.src_preprocessing_steps)
+
+    if isinstance(config.tgt_preprocessing_steps, string_types):
+        tgt_lang = config.tgt_preprocessing_steps
+        from transformer_2.data.processing import DEFAULT_PROCESSING_STEPS
+        assert tgt_lang in DEFAULT_PROCESSING_STEPS, \
+            '{} does not have default processing steps'.format(tgt_lang)
+        config.tgt_preprocessing_steps = DEFAULT_PROCESSING_STEPS[tgt_lang]
+        print('Using default processing steps for {}'.format(tgt_lang))
+        print(config.tgt_preprocessing_steps)
+
+    # Tokenization configs
+    if config.src_spm_configs.use_existing is not None:
+        check_file_exists(config.src_spm_configs.use_existing)
+    if config.tgt_spm_configs.use_existing is not None:
+        check_file_exists(config.tgt_spm_configs.use_existing)
+
+    # Train configs
+    check_type('num_steps', config.train_configs.num_steps, integer_types)
+    check_type('update_freq', config.train_configs.update_freq, integer_types)
+    check_type(
+        'max_batch_tokens',
+        config.train_configs.max_batch_tokens,
+        integer_types
+    )
+    check_type(
+        'max_batch_sentences',
+        config.train_configs.max_batch_sentences,
+        integer_types
+    )
+    check_type('lr', config.train_configs.lr, float)
+    check_type(
+        'warmup_steps',
+        config.train_configs.warmup_steps,
+        integer_types
+    )
+    check_type('warmup_init_lr', config.train_configs.warmup_init_lr, float)
+    assert config.train_configs.lr_scheduler == 'fixed', \
+        'Currently only fixed learning rate is implemented'
+    check_type('min_lr', config.train_configs.min_lr, float)
+    assert len(config.train_configs.adam_betas) == 2
+    check_type('adam_beta_1', config.train_configs.adam_betas[0], float)
+    check_type('adam_beta_2', config.train_configs.adam_betas[1], float)
+    if config.train_configs.clipnorm is not None:
+        check_type('clipnorm', config.train_configs.clipnorm, float)
+
+    # Log configs
+    check_type(
+        'log_interval',
+        config.train_configs.log_interval,
+        integer_types
+    )
+    check_type(
+        'checkpoint_interval',
+        config.train_configs.checkpoint_interval,
+        integer_types
+    )
 
 
 _C = ConfigSystem(validate_config_fn=validate_config_fn)
@@ -46,13 +145,19 @@ _C.tgt_valid_path = None
 # Start of preprocessing configs
 # --------------------------------------------------------------------------- #
 
-# `src_preprocessing_steps` (type: list[processor_config]) (default: None)
+# `src_preprocessing_steps` (type: string | list[processor_config])
+# (default: 'en')
 # The steps applied to the source language corpus to do data cleaning
-_C.src_preprocessing_steps = []
+# Either a list of processor configs
+# or one of ['en', 'de', 'fr', 'zh']
+_C.src_preprocessing_steps = 'en'
 
-# `tgt_preprocessing_steps` (type: list[processor_config]) (default: None)
+# `tgt_preprocessing_steps` (type: string | list[processor_config])
+# (default: 'en)
 # The steps applied to the target language corpus to do data cleaning
-_C.tgt_preprocessing_steps = []
+# Either a list of processor configs
+# or one of ['en', 'de', 'fr', 'zh']
+_C.tgt_preprocessing_steps = 'en'
 
 
 # --------------------------------------------------------------------------- #
