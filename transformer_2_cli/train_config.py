@@ -51,7 +51,9 @@ def validate_config_fn(config):
         from transformer_2.data.processing import DEFAULT_PROCESSING_STEPS
         assert src_lang in DEFAULT_PROCESSING_STEPS, \
             '{} does not have default processing steps'.format(src_lang)
+        config.immutable(False)
         config.src_preprocessing_steps = DEFAULT_PROCESSING_STEPS[src_lang]
+        config.immutable(True)
         print('Using default processing steps for {}'.format(src_lang))
         print(config.src_preprocessing_steps)
 
@@ -60,7 +62,9 @@ def validate_config_fn(config):
         from transformer_2.data.processing import DEFAULT_PROCESSING_STEPS
         assert tgt_lang in DEFAULT_PROCESSING_STEPS, \
             '{} does not have default processing steps'.format(tgt_lang)
+        config.immutable(False)
         config.tgt_preprocessing_steps = DEFAULT_PROCESSING_STEPS[tgt_lang]
+        config.immutable(True)
         print('Using default processing steps for {}'.format(tgt_lang))
         print(config.tgt_preprocessing_steps)
 
@@ -102,12 +106,12 @@ def validate_config_fn(config):
     # Log configs
     check_type(
         'log_interval',
-        config.train_configs.log_interval,
+        config.log_configs.log_interval,
         integer_types
     )
     check_type(
         'checkpoint_interval',
-        config.train_configs.checkpoint_interval,
+        config.log_configs.checkpoint_interval,
         integer_types
     )
 
