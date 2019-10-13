@@ -332,7 +332,7 @@ def do_train(config):
         # First trace
         do_update(0)
         model.summary()
-        save_model_config()
+        save_model_config(model, config)
 
         # Do training loop
         for i in tqdm(range(1, total_num_updates), desc='Training', ncols=80):
