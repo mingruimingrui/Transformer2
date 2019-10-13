@@ -14,8 +14,7 @@ from transformer_2.models import Transformer
 from transformer_2.data.datasets import TranslationDataset
 from transformer_2.losses.label_smoothed_nll_loss \
     import label_smoothed_nll_loss
-from transformer_2.utils.io_utils \
-    import read_yaml_from_file, write_yaml_to_file
+from transformer_2.utils.io_utils import write_yaml_to_file
 
 from transformer_2_cli import setup_utils
 from transformer_2_cli.train_config import make_config
@@ -139,35 +138,38 @@ def compute_learning_rate(update_nb, config):
             'lr_scheduler {} not implemented yet'.format(lr_scheduler))
 
 
-def save_model(model, update_id, config, save_model_config=False):
+def save_model_config(model, config):
+    model_config = model.config.to_dict()
+
+    # Save model configs
+    checkpoint_dir = setup_utils.get_checkpoint_dir(config)
+    checkpoint_savepath = os.path.join(checkpoint_dir, 'model_config.yaml')
+    write_yaml_to_file(model_config, checkpoint_savepath)
+
+    # Copy to output
+    output_dir = setup_utils.get_output_dir(config)
+    output_savepath = os.path.join(output_dir, 'model_config.yaml')
+    shutil.copy(checkpoint_savepath, output_savepath)
+
+
+def save_model(model, update_nb, config):
     checkpoint_dir = setup_utils.get_checkpoint_dir(config)
     output_dir = setup_utils.get_output_dir(config)
 
-    if save_model_config:
-        # Save config
-        cached_config_path = setup_utils.get_cached_config_path(config)
-        cached_config = read_yaml_from_file(cached_config_path)
-        cached_config['model_configs'] = model.config.to_dict()
-        write_yaml_to_file(cached_config, cached_config_path)
-
-        model_config_path = os.path.join(checkpoint_dir, 'model_config.yaml')
-        write_yaml_to_file(model.config.to_dict(), model_config_path)
-
     # Save the weights
     weight_savepath = os.path.join(checkpoint_dir, 'checkpoint_{}.h5')
-    weight_savepath = weight_savepath.format(update_id)
+    weight_savepath = weight_savepath.format(update_nb)
     model.save_weights(weight_savepath)
 
-    # Copy weights to output
+    # Copy to output
     output_savepath = os.path.join(output_dir, 'checkpoint.h5')
     shutil.copy(weight_savepath, output_savepath)
 
 
 def log_metrics(update_nb, obj, log_with_logger=False):
-    if isinstance(update_nb, int):
-        for k, v in obj.items():
-            if isinstance(v, tf.Tensor):
-                tf.summary.scalar(k, v, step=update_nb)
+    for k, v in obj.items():
+        if isinstance(v, tf.Tensor):
+            tf.summary.scalar(k, v, step=update_nb)
 
     if log_with_logger:
         cpu_obj = {'update': update_nb}
@@ -193,12 +195,20 @@ def do_train(config):
     train_dtype = tf.float16 if config.train_configs.fp16 else tf.float32
     model, optimizer = load_model_and_optimizer(dataset, train_dtype, config)
 
-    # Define step and update functions
+    # Define some shared objects and training constants
     log_dir = setup_utils.get_log_dir(config)
     writer = tf.summary.create_file_writer(log_dir)
     tgt_pad_idx = dataset.tgt_spm_model.pad_id()
     dummy_new_state_order = tf.constant([], dtype=train_dtype)
 
+    total_num_steps = config.train_configs.num_steps
+    total_num_updates = total_num_steps // config.train_configs.update_freq
+    shared_obj = {
+        'prev_log_time': 0,
+        'prev_save_time': 0
+    }
+
+    # Define step and update functions
     @tf.function(input_signature=[
         tf.TensorSpec(shape=[None, None], dtype=tf.int32),
         tf.TensorSpec(shape=[None, None], dtype=tf.int32),
@@ -228,7 +238,7 @@ def do_train(config):
         return loss, nll_loss, bsz
 
     @tf.function
-    def do_one_update():
+    def _do_update():
         # Init placeholders for training metrics
         total_loss = tf.constant(0, dtype=train_dtype)
         total_nll_loss = tf.constant(0, dtype=train_dtype)
@@ -252,7 +262,40 @@ def do_train(config):
             total_bsz
         )
 
+    def do_update(update_nb):
+        """
+        Wrapper around _do_update to
+        update learning rate and do logging/checkpointing
+        """
+
+        # Update learning rate
+        optimizer.learning_rate = compute_learning_rate(update_nb, config)
+
+        # Do backprop
+        loss, nll_loss, bsz = _do_update()
+
+        # Do logging
+        metrics = {'bsz': bsz, 'loss': loss, 'nll_loss': nll_loss}
+        cur_time = time()
+        log_interval = config.log_configs.log_interval
+        if cur_time >= shared_obj['prev_log_time'] + log_interval:
+            log_metrics(update_nb, metrics, True)
+            shared_obj['prev_log_time'] = cur_time
+        else:
+            log_metrics(update_nb, metrics, False)
+        writer.flush()
+
+        # Save model
+        checkpoint_interval = config.log_configs.checkpoint_interval
+        if cur_time >= shared_obj['prev_save_time'] + checkpoint_interval:
+            save_model(model, update_nb, config)
+            do_validation(update_nb)
+            shared_obj['prev_save_time'] = cur_time
+
     def do_validation(update_nb):
+        """ BUG: validation causes high memory usage """
+        return
+
         sys.stdout.write('\r')
         logger.info('Doing validation')
         start_time = time()
@@ -283,49 +326,21 @@ def do_train(config):
 
     # Training starts
     logger.info('Ready to begin training')
+    start_time = time()
+
     with writer.as_default():
         # First trace
-        loss, nll_loss, bsz = do_one_update()
-
-        # Log first trace results
+        do_update(0)
         model.summary()
-        save_model(model, 0, config=config, save_model_config=True)
-        metrics = {'bsz': bsz, 'loss': loss, 'nll_loss': nll_loss}
-        log_metrics(0, metrics, True)
-        do_validation(0)
+        save_model_config()
 
         # Do training loop
-        total_num_updates = config.train_configs.num_steps // \
-            config.train_configs.update_freq
-        start_time = time()
-        prev_log_time = start_time
-        prev_save_time = start_time
-
         for i in tqdm(range(1, total_num_updates), desc='Training', ncols=80):
-            # Update learning rate
-            optimizer.learning_rate = compute_learning_rate(i, config)
+            do_update(i)
 
-            # Do backprop
-            loss, nll_loss, bsz = do_one_update()
-
-            # Do logging
-            metrics = {'bsz': bsz, 'loss': loss, 'nll_loss': nll_loss}
-            cur_time = time()
-            if cur_time >= prev_log_time + config.log_configs.log_interval:
-                log_metrics(i, metrics, True)
-                prev_log_time = cur_time
-            else:
-                log_metrics(i, metrics, False)
-            writer.flush()
-
-            # Save model
-            if cur_time >= prev_save_time + 3600:
-                save_model(model, i, config)
-                do_validation(i)
-                prev_save_time = cur_time
-
-        save_model(model, 'final', config)
-        do_validation('final')
+        # Save final model and do validation
+        save_model(model, total_num_updates, config)
+        do_validation(total_num_updates)
 
     finish_time = time()
     time_taken = finish_time - start_time
