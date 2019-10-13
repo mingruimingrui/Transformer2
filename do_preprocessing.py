@@ -7,8 +7,7 @@ from six import string_types
 
 from transformer_2.data.processing import make_processor_from_list
 from transformer_2.utils.file_utils import count_lines, map_file
-from transformer_2.utils.io_utils \
-    import read_yaml_from_file, write_yaml_to_file
+from transformer_2.utils.io_utils import write_yaml_to_file
 
 from transformer_2_cli.train_config import make_config
 from transformer_2_cli import setup_utils
@@ -88,11 +87,10 @@ def do_preprocessing(config):
             show_pbar=True)
 
     # Save preprocessing steps to cached config file
-    cached_config_path = setup_utils.get_cached_config_path(config)
-    cached_config = read_yaml_from_file(cached_config_path)
-    cached_config['src_preprocessing_steps'] = config.src_preprocessing_steps
-    cached_config['tgt_preprocessing_steps'] = config.tgt_preprocessing_steps
-    write_yaml_to_file(cached_config, cached_config_path)
+    cache_file = setup_utils.get_output_processing_steps_file(config, 'src')
+    write_yaml_to_file(config.src_preprocessing_steps, cache_file)
+    cache_file = setup_utils.get_output_processing_steps_file(config, 'tgt')
+    write_yaml_to_file(config.tgt_preprocessing_steps, cache_file)
 
 
 def main():

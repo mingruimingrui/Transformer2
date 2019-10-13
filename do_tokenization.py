@@ -123,12 +123,12 @@ def do_tokenization(config):
                 show_pbar=True
             )
 
-    # Save preprocessing steps to cached config file
-    cached_config_path = setup_utils.get_cached_config_path(config)
-    cached_config = read_yaml_from_file(cached_config_path)
-    cached_config['src_spm_configs'] = config.src_spm_configs.to_dict()
-    cached_config['tgt_spm_configs'] = config.tgt_spm_configs.to_dict()
-    write_yaml_to_file(cached_config, cached_config_path)
+    # # Save preprocessing steps to cached config file
+    # cached_config_path = setup_utils.get_cached_config_path(config)
+    # cached_config = read_yaml_from_file(cached_config_path)
+    # cached_config['src_spm_configs'] = config.src_spm_configs.to_dict()
+    # cached_config['tgt_spm_configs'] = config.tgt_spm_configs.to_dict()
+    # write_yaml_to_file(cached_config, cached_config_path)
 
 
 def main():
