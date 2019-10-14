@@ -177,9 +177,9 @@ class TransformerDecoder(tf.keras.Model):
             self.position_embeddings(tf.constant([[0]]))
 
         self.project_in_dim = None if hidden_dim == input_dim else \
-            tf.keras.layers.Dense(hidden_dim, use_bias=False)
+            tf.keras.layers.Dense(hidden_dim, use_bias=False, **kwargs)
         self.project_out_dim = None if hidden_dim == output_dim else \
-            tf.keras.layers.Dense(output_dim, use_bias=False)
+            tf.keras.layers.Dense(output_dim, use_bias=False, **kwargs)
 
         self.decoder_layers = []
         for i in range(num_layers):
