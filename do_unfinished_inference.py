@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import io
 import warnings
 from time import time
@@ -55,7 +57,7 @@ tgt_spm_model.Load('debug/output/spm_model.tgt.model')
 
 # Load sentences to translate
 print('Loading sentences')
-with io.open('debug/newstest2019-ende.en', 'r', encoding='utf-8') as f:
+with io.open('debug/newstest2017-ende.en', 'r', encoding='utf-8') as f:
     src_sents = [processor(l.strip()) for l in f][:10000]
 tokenized_src_sents = []
 for sent in tqdm(src_sents, desc='Tokenizing sentences'):
