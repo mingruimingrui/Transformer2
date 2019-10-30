@@ -33,7 +33,8 @@ if args.beam_size != 1:
 warnings.warn('Currently beam search is not working properly.')
 
 # Set memory growth on GPU
-tf.config.optimizer.set_jit(True)
+if args.jit:
+    tf.config.optimizer.set_jit(True)
 for d in tf.config.experimental.list_physical_devices('GPU'):
     tf.config.experimental.set_memory_growth(d, True)
 
