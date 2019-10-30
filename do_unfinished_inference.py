@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import io
+import argparse
 import warnings
 from time import time
 from tqdm import tqdm
@@ -14,17 +15,25 @@ from transformer_2.data.processing import make_processor_from_list
 from transformer_2.utils.batching import batch_tokenized_sents
 from transformer_2.utils.io_utils import read_yaml_from_file
 
-MODEL_DTYPE = tf.float16
-MAX_BATCH_SENTENCES = 256
-MAX_BATCH_TOKENS = 30000
-BEAM_SIZE = 1
-PRINT_TRANSLATIONS = False
+parser = argparse.ArgumentParser()
 
-if BEAM_SIZE != 1:
+parser.add_argument('--fp16', action='store_true')
+parser.add_argument('--max_batch_sentences', type=int, default=256)
+parser.add_argument('--max_batch_tokens', type=int, default=30000)
+parser.add_argument('--beam_size', type=int, default=1)
+parser.add_argument('--print_translations', action='store_true')
+parser.add_argument('--jit', action='store_true')
+
+args = parser.parse_args()
+
+MODEL_DTYPE = tf.float16 if args.fp16 else tf.float32
+
+if args.beam_size != 1:
     raise ValueError('Currently beam_size must be 1')
 warnings.warn('Currently beam search is not working properly.')
 
 # Set memory growth on GPU
+tf.config.optimizer.set_jit(True)
 for d in tf.config.experimental.list_physical_devices('GPU'):
     tf.config.experimental.set_memory_growth(d, True)
 
@@ -74,8 +83,8 @@ _, batches, _, _ = batch_tokenized_sents(
     tokenized_sents=tokenized_src_sents,
     padding_idx=src_spm_model.pad_id(),
     max_positions=model.config['encoder_max_positions'],
-    max_batch_tokens=MAX_BATCH_TOKENS,
-    max_batch_sentences=MAX_BATCH_SENTENCES,
+    max_batch_tokens=args.max_batch_tokens,
+    max_batch_sentences=args.max_batch_sentences,
     do_optimal_batching=True
 )
 
@@ -98,18 +107,18 @@ dataset_iterator = iter(dataset)
 # Make placeholder init values
 decoder_max_positions = model.config['decoder_max_positions']
 _pred_tokens_init_value = np.zeros(
-    [MAX_BATCH_SENTENCES * BEAM_SIZE, decoder_max_positions],
+    [args.max_batch_sentences * args.beam_size, decoder_max_positions],
     dtype=np.int32
 )
 _pred_tokens_init_value[:, 0] = tgt_spm_model.bos_id()
 _pred_tokens_init_value = tf.constant(_pred_tokens_init_value)
 _scores_init_value = tf.zeros(
-    [MAX_BATCH_SENTENCES * BEAM_SIZE, decoder_max_positions - 1],
+    [args.max_batch_sentences * args.beam_size, decoder_max_positions - 1],
     dtype=MODEL_DTYPE
 )
-_tgt_lens_init_value = tf.ones([MAX_BATCH_SENTENCES], dtype=tf.int32)
+_tgt_lens_init_value = tf.ones([args.max_batch_sentences], dtype=tf.int32)
 _finished_init_value = \
-    tf.zeros([MAX_BATCH_SENTENCES * BEAM_SIZE], dtype=tf.bool)
+    tf.zeros([args.max_batch_sentences * args.beam_size], dtype=tf.bool)
 
 # Make placeholders
 pred_tokens_placeholder = tf.Variable(_pred_tokens_init_value)
@@ -133,7 +142,7 @@ def translate_batch():
     src_tokens_shape = tf.shape(src_tokens)
     batch_size = src_tokens_shape[0]
     src_len = src_tokens_shape[1]
-    beammed_batch_size = batch_size * BEAM_SIZE
+    beammed_batch_size = batch_size * args.beam_size
     max_tgt_len = tf.cast(tf.cast(src_len, tf.float16) * 1.4 + 2, tf.int32)
     max_tgt_len = tf.minimum(max_tgt_len, decoder_max_positions)
 
@@ -152,9 +161,9 @@ def translate_batch():
     preds = tf.argsort(logits, direction='DESCENDING')
 
     # Get top preds and probs for each sentence
-    preds = preds[:, :BEAM_SIZE]  # batch_size * beam_size
+    preds = preds[:, :args.beam_size]  # batch_size * beam_size
     idxs = tf.reshape(tf.range(batch_size, dtype=preds.dtype), [-1, 1])
-    idxs = tf.tile(idxs, [1, BEAM_SIZE])
+    idxs = tf.tile(idxs, [1, args.beam_size])
     lprobs = tf.gather_nd(lprobs, tf.stack([idxs, preds], axis=-1))
     # lprobs.shape == [batch_size, beam_size]
 
@@ -168,11 +177,12 @@ def translate_batch():
 
     # Expand encoder outputs for beam search
     encoder_out = tf.expand_dims(encoder_out, 2)
-    encoder_out = tf.tile(encoder_out, [1, 1, BEAM_SIZE, 1])
+    encoder_out = tf.tile(encoder_out, [1, 1, args.beam_size, 1])
     encoder_out = tf.reshape(encoder_out, (src_len, beammed_batch_size, -1))
 
     encoder_padding_mask = tf.expand_dims(encoder_padding_mask, 1)
-    encoder_padding_mask = tf.tile(encoder_padding_mask, [1, BEAM_SIZE, 1])
+    encoder_padding_mask = \
+        tf.tile(encoder_padding_mask, [1, args.beam_size, 1])
     encoder_padding_mask = tf.reshape(
         encoder_padding_mask,
         (beammed_batch_size, src_len)
@@ -198,9 +208,9 @@ def translate_batch():
         preds = tf.argsort(logits, direction='DESCENDING')
 
         # Get top preds for each sentence
-        preds = preds[:, :BEAM_SIZE]  # beammed_batch_size * beam_size
+        preds = preds[:, :args.beam_size]  # beammed_batch_size * beam_size
         idxs = tf.reshape(tf.range(batch_size, dtype=preds.dtype), [-1, 1])
-        idxs = tf.tile(idxs, [1, BEAM_SIZE])
+        idxs = tf.tile(idxs, [1, args.beam_size])
         lprobs = tf.gather_nd(lprobs, tf.stack([idxs, preds], axis=-1))
         # beammed_batch_size * beam_size
 
@@ -240,17 +250,16 @@ def translate_batch():
 
 # Do translation
 batch_size, max_tgt_len, src_tokens = translate_batch()
-beammed_batch_size = batch_size * BEAM_SIZE
+beammed_batch_size = batch_size * args.beam_size
 pred_tokens = pred_tokens_placeholder[:beammed_batch_size, :max_tgt_len]
-pred_tokens = pred_tokens[::BEAM_SIZE]
-if PRINT_TRANSLATIONS:
-    for src_token_ids, tgt_token_ids in zip(
-        src_tokens.numpy(), pred_tokens.numpy()
-    ):
-        print()
-        print(src_spm_model.decode_ids(src_token_ids.tolist()))
-        print(tgt_spm_model.decode_ids(tgt_token_ids.tolist()))
-        print()
+pred_tokens = pred_tokens[::args.beam_size]
+for src_token_ids, tgt_token_ids in zip(
+    src_tokens.numpy(), pred_tokens.numpy()
+):
+    print()
+    print(src_spm_model.decode_ids(src_token_ids.tolist()))
+    print(tgt_spm_model.decode_ids(tgt_token_ids.tolist()))
+    print()
 
 with tqdm(total=len(src_sents), desc='Translating') as pbar:
     pbar.update(batch_size.numpy())
@@ -265,14 +274,14 @@ with tqdm(total=len(src_sents), desc='Translating') as pbar:
         num_translated += batch_size
 
         # Retrieve value from placeholders
-        beammed_batch_size = batch_size * BEAM_SIZE
+        beammed_batch_size = batch_size * args.beam_size
         pred_tokens = \
             pred_tokens_placeholder[:beammed_batch_size, :max_tgt_len]
-        pred_tokens = pred_tokens[::BEAM_SIZE]
+        pred_tokens = pred_tokens[::args.beam_size]
         scores = scores_placeholder[:beammed_batch_size, :max_tgt_len - 1]
-        scores = scores[::BEAM_SIZE]
+        scores = scores[::args.beam_size]
 
-        if PRINT_TRANSLATIONS:
+        if args.print_translations:
             for src_token_ids, tgt_token_ids in zip(
                 src_tokens.numpy(), pred_tokens.numpy()
             ):
